@@ -10,11 +10,12 @@ import { PluginData, RepositoryConfig, LogEntry, Author } from './types';
 function App() {
   const [user, setUser] = useState<Author | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'store' | 'repos'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'store' | 'repos'>('store');
   const [plugins] = useState<PluginData[]>(MOCK_PLUGINS);
   const [repos, setRepos] = useState<RepositoryConfig[]>(MOCK_REPOS);
   const [logs, setLogs] = useState<LogEntry[]>(MOCK_LOGS);
   const [showInstallModal, setShowInstallModal] = useState(false);
+  const [showLogin, setShowLogin] = useState(false);
 
   useEffect(() => {
     fetch('/api/authors/me')
@@ -27,6 +28,7 @@ function App() {
       .then(data => {
         setUser(data);
         setIsLoading(false);
+        setActiveTab('dashboard'); // Switch to dashboard if logged in
       })
       .catch(() => {
         setUser(null);
@@ -107,7 +109,7 @@ function App() {
     return <div className="flex items-center justify-center h-screen bg-slate-950 text-slate-200">Loading...</div>;
   }
 
-  if (!user) {
+  if (showLogin && !user) {
     return <LoginPage />;
   }
 
@@ -115,9 +117,10 @@ function App() {
     <div className="flex h-screen bg-slate-950 text-slate-200 font-sans selection:bg-indigo-500/30">
       
       {/* Sidebar */}
+      {user && (
       <aside className="w-64 border-r border-slate-800 flex flex-col bg-slate-900/50">
         <div className="p-6 flex items-center gap-3">
-          <div className="w-8 h-8 rounded bg-indigo-600 flex items-center justify-center text-white font-bold shadow-lg shadow-indigo-500/20">SV</div>
+          <img src="/app.png" alt="Logo" className="w-8 h-8 rounded shadow-lg shadow-indigo-500/20" />
           <h1 className="font-bold text-lg tracking-tight">PluginStore <span className="text-indigo-400">Mgr</span></h1>
         </div>
 
@@ -152,17 +155,34 @@ function App() {
            </div>
         </div>
       </aside>
+      )}
 
       {/* Main Content */}
       <main className="flex-1 overflow-auto relative">
         <header className="sticky top-0 z-10 bg-slate-950/80 backdrop-blur-md border-b border-slate-800 px-8 py-4 flex justify-between items-center">
-            <h2 className="text-xl font-semibold text-white capitalize">{activeTab.replace('-', ' ')}</h2>
+            {user ? (
+              <h2 className="text-xl font-semibold text-white capitalize">{activeTab.replace('-', ' ')}</h2>
+            ) : (
+              <div className="flex items-center gap-3">
+                <img src="/app.png" alt="Logo" className="w-8 h-8 rounded shadow-lg shadow-indigo-500/20" />
+                <h1 className="font-bold text-lg tracking-tight">ShadowViewer <span className="text-indigo-400">PluginStore</span></h1>
+              </div>
+            )}
             <div className="flex items-center gap-4">
+               {user && (
                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
                   <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
                   <span className="text-xs font-medium text-emerald-400">System Online</span>
                </div>
-               <UserMenu user={user} />
+               )}
+               {user ? (
+                 <UserMenu user={user} />
+               ) : (
+                 <button onClick={() => setShowLogin(true)} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-medium transition-colors">
+                   <Github className="w-4 h-4" />
+                   Login
+                 </button>
+               )}
             </div>
         </header>
 
@@ -202,7 +222,7 @@ function App() {
                {/* Right Column: Quick Status */}
                <div className="space-y-6">
                    <div className="bg-gradient-to-br from-indigo-900/50 to-slate-900 border border-indigo-500/30 p-6 rounded-xl">
-                      <h3 className="font-bold text-lg text-white mb-2">ShadowViewer Store</h3>
+                      <h3 className="font-bold text-lg text-white mb-2">ShadowViewer PluginStore</h3>
                       <p className="text-sm text-slate-300 mb-4">
                         The automation service listens for Webhook events from configured repositories. When a release is detected, it downloads the assets, validates the <code className="bg-slate-950 px-1 rounded text-indigo-300">plugin.json</code>, and creates a Pull Request.
                       </p>
