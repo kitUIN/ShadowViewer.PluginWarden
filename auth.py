@@ -6,7 +6,7 @@ from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import RedirectResponse
 
 from config import settings
-from models import get_session, get_or_create_author, Author
+from models import get_session, get_or_create_author, Author, Repository
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -62,8 +62,13 @@ def callback(code: Optional[str] = None):
         author = get_or_create_author(session, user_json, access_token=access_token, token_scopes=scope, mark_admin=mark_admin)
         session.commit()
 
-    # Set token as HttpOnly cookie and redirect to root
-    resp = RedirectResponse(url="/")
+        # 检查数据库中是否有已安装的仓库与当前用户关联（Author -> Repository 且 installed==True）
+        installed_repo_exists = session.query(Repository).filter(Repository.author_id == author.id, Repository.installed == True).first() is not None
+
+    # 若不存在已安装仓库，则重定向到 GitHub App 安装页
+    redirect_url = "https://github.com/apps/shadowviewerpluginwarden/installations/new" if not installed_repo_exists else "/"
+    # Set token as HttpOnly cookie and redirect
+    resp = RedirectResponse(url=redirect_url)
     # In production, set secure=True and samesite adjustments
     resp.set_cookie(key="access_token", value=access_token, httponly=True, secure=False)
     return resp
