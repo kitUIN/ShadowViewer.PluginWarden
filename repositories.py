@@ -14,6 +14,49 @@ router = APIRouter(prefix="/repositories", tags=["Repositories"])
 
 
 
+@router.get("/installed_exists", tags=["Repositories"])
+async def installed_exists(
+    db: Session = Depends(get_db),
+    current_user: Author = Depends(get_current_user)
+):
+    """
+    检查数据库中是否存在与当前用户关联且已安装的仓库
+    Returns: {"installed_repo_exists": bool}
+    """
+    installed_repo_exists = db.query(Repository).filter(Repository.author_id == current_user.id, Repository.installed == True).first() is not None
+    return {"installed_repo_exists": installed_repo_exists}
+
+
+@router.get("/search", response_model=List[RepositoryBasicModel], tags=["Search"])
+async def search_repositories(
+    q: str = Query(..., description="搜索关键词"),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    搜索仓库
+    """
+    search_term = f"%{q}%"
+    repositories = db.query(Repository).filter(
+        Repository.name.like(search_term) | Repository.full_name.like(search_term)
+    ).all()
+    
+    result = []
+    for repo in repositories:
+        release_count = db.query(Release).filter(Release.repository_id == repo.id).count()
+        repo_model = RepositoryBasicModel(
+            id=repo.id,
+            name=repo.name,
+            full_name=repo.full_name,
+            html_url=repo.html_url,
+            release_count=release_count
+        )
+        result.append(repo_model)
+    
+    return result
+
+
+
 @router.get("/", response_model=PaginatedResponse[RepositoryBasicModel], tags=["Repositories"]) 
 async def get_repositories(
     page: int = Query(1, ge=1, description="页码（从1开始）"),
@@ -50,6 +93,7 @@ async def get_repositories(
         items=items
     )
 
+
 @router.get("/{repo_id}", response_model=RepositoryModel, tags=["Repositories"])
 async def get_repository(repo_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     """
@@ -65,31 +109,3 @@ async def get_repository(repo_id: int, db: Session = Depends(get_db), current_us
             html_url=repo.html_url,
             releases=repo.releases, 
         )
-
-@router.get("/search", response_model=List[RepositoryBasicModel], tags=["Search"])
-async def search_repositories(
-    q: str = Query(..., description="搜索关键词"),
-    db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
-):
-    """
-    搜索仓库
-    """
-    search_term = f"%{q}%"
-    repositories = db.query(Repository).filter(
-        Repository.name.like(search_term) | Repository.full_name.like(search_term)
-    ).all()
-    
-    result = []
-    for repo in repositories:
-        release_count = db.query(Release).filter(Release.repository_id == repo.id).count()
-        repo_model = RepositoryBasicModel(
-            id=repo.id,
-            name=repo.name,
-            full_name=repo.full_name,
-            html_url=repo.html_url,
-            release_count=release_count
-        )
-        result.append(repo_model)
-    
-    return result
