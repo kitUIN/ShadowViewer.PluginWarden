@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { LogOut, User as UserIcon, ChevronDown } from 'lucide-react';
+import { LogOut, User as UserIcon, ChevronDown, Github } from 'lucide-react';
 import { Author } from '../types';
 
 interface UserMenuProps {
@@ -56,6 +56,16 @@ export function UserMenu({ user }: UserMenuProps) {
           >
             <UserIcon size={16} />
             GitHub Profile
+          </a>
+
+          <a 
+            href="https://github.com/apps/shadowviewerpluginwarden/installations/new"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800 hover:text-white transition-colors"
+          >
+            <Github size={16} />
+            Configure App
           </a>
           
           <button
