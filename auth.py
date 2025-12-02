@@ -74,6 +74,13 @@ def callback(code: Optional[str] = None):
     return resp
 
 
+@router.get("/logout")
+def logout(request: Request):
+    """Clear access token cookie and redirect to home."""
+    resp = RedirectResponse(url="/")
+    resp.delete_cookie(key="access_token")
+    return resp
+
 
 def get_current_user(request: Request):
     """Dependency: validate access token (cookie or Authorization header), persist it to Author, and return Author DB instance.

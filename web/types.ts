@@ -4,6 +4,15 @@ export interface PluginDependency {
   Need: string;
 }
 
+export interface Author {
+  id: number;
+  github_id: number;
+  login: string;
+  avatar_url: string;
+  html_url: string;
+  type: string;
+}
+
 export interface AffiliationTag {
   Name: string;
   BackgroundHex: string;

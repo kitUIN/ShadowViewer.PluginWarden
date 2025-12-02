@@ -4,10 +4,12 @@ import { MOCK_PLUGINS, MOCK_REPOS, MOCK_LOGS } from './constants';
 import { PluginCard } from './components/PluginCard';
 import { LogTerminal } from './components/LogTerminal';
 import { LoginPage } from './components/LoginPage';
-import { PluginData, RepositoryConfig, LogEntry } from './types';
+import { UserMenu } from './components/UserMenu';
+import { PluginData, RepositoryConfig, LogEntry, Author } from './types';
 
 function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  const [user, setUser] = useState<Author | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'store' | 'repos'>('dashboard');
   const [plugins] = useState<PluginData[]>(MOCK_PLUGINS);
   const [repos, setRepos] = useState<RepositoryConfig[]>(MOCK_REPOS);
@@ -17,12 +19,18 @@ function App() {
     fetch('/api/authors/me')
       .then(res => {
         if (res.ok) {
-          setIsAuthenticated(true);
-        } else {
-          setIsAuthenticated(false);
+          return res.json();
         }
+        throw new Error('Not authenticated');
       })
-      .catch(() => setIsAuthenticated(false));
+      .then(data => {
+        setUser(data);
+        setIsLoading(false);
+      })
+      .catch(() => {
+        setUser(null);
+        setIsLoading(false);
+      });
   }, []);
 
   // Simulating live logs for the demo
@@ -65,11 +73,11 @@ function App() {
      }
   };
 
-  if (isAuthenticated === null) {
+  if (isLoading) {
     return <div className="flex items-center justify-center h-screen bg-slate-950 text-slate-200">Loading...</div>;
   }
 
-  if (!isAuthenticated) {
+  if (!user) {
     return <LoginPage />;
   }
 
@@ -124,6 +132,7 @@ function App() {
                   <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
                   <span className="text-xs font-medium text-emerald-400">System Online</span>
                </div>
+               <UserMenu user={user} />
             </div>
         </header>
 
