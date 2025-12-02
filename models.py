@@ -14,6 +14,14 @@ engine = create_engine(f'sqlite:///{db_file}')
 
 
 get_session = sessionmaker(bind=engine)
+
+# 依赖函数，用于获取数据库会话
+def get_db():
+    db = get_session()
+    try:
+        yield db
+    finally:
+        db.close()
 # 定义数据库模型
 class Repository(Base):
     __tablename__ = 'repositories'
@@ -30,6 +38,10 @@ class Repository(Base):
     # 与Release的关系
     releases = relationship("Release", back_populates="repository", cascade="all, delete-orphan")
     
+    @property
+    def html_url(self):
+        return f"https://github.com/{self.full_name}"
+
     def __repr__(self):
         return f"<Repository(name='{self.name}', full_name='{self.full_name}')>"
 
@@ -133,28 +145,6 @@ def get_or_create_author(session:Session, author_data, access_token: str = None,
     session.flush()
     return author
 
-
-def ensure_author_columns():
-    """Ensure new columns exist in sqlite authors table; add them if missing."""
-    # Only works for sqlite and simple ADD COLUMN operations
-    try:
-        with engine.connect() as conn:
-            res = conn.execute(text("PRAGMA table_info('authors')"))
-            existing = {row['name'] for row in res.mappings()}
-            alters = []
-            if 'access_token' not in existing:
-                alters.append("ALTER TABLE authors ADD COLUMN access_token TEXT")
-            if 'token_updated_at' not in existing:
-                alters.append("ALTER TABLE authors ADD COLUMN token_updated_at DATETIME")
-            if 'token_scopes' not in existing:
-                alters.append("ALTER TABLE authors ADD COLUMN token_scopes VARCHAR(255)")
-            if 'is_admin' not in existing:
-                alters.append("ALTER TABLE authors ADD COLUMN is_admin BOOLEAN DEFAULT 0")
-            for sql in alters:
-                conn.execute(text(sql))
-    except Exception:
-        # best-effort; ignore if table doesn't exist or unsupported DB
-        pass
 
 # 获取GitHub仓库的releases
 def fetch_github_releases(repo_owner, repo_name, token=None):
@@ -310,8 +300,7 @@ def save_releases_to_db(repo_owner, repo_name, releases_data=None):
 
 
 Base.metadata.create_all(engine)
-# Run migration helper to add new author columns if table already existed
-ensure_author_columns()
+
 
 if __name__ == '__main__':
     save_releases_to_db("kitUIN","ShadowViewer.Plugin.Bika")

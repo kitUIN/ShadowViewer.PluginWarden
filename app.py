@@ -8,10 +8,11 @@ import hashlib
 import hmac
 
 import uvicorn
-from models import get_session,Session,Repository,Author,Asset,Release, save_releases_to_db
+from models import get_db, Session,Repository,Author,Asset,Release, save_releases_to_db
 from github_utils import create_pr, webhook_install, webhook_release
 from res_model import *
-from auth import router as auth_router, get_current_user
+from auth import  router as auth_router, get_current_user
+from authors import  router  as authors_router
 
 def verify_signature(payload_body, secret_token, signature_header):
     """Verify that the payload was sent from GitHub by validating SHA256.
@@ -38,14 +39,10 @@ patch_fastapi(app)
 
 # include auth routes (login / callback)
 app.include_router(auth_router, prefix="/api")
+# include authors routes
+app.include_router(authors_router, prefix="/api")
 
-# 依赖函数，用于获取数据库会话
-def get_db():
-    db = get_session()
-    try:
-        yield db
-    finally:
-        db.close()
+
 
 @app.post("/api/webhook")
 async def github_webhook(request: Request):
@@ -92,7 +89,6 @@ async def get_repositories(
         repo_model = RepositoryBasicModel(
             id=repo.id,
             name=repo.name,
-            plugin=json.loads(repo.plugin),
             full_name=repo.full_name,
             html_url=repo.html_url,
             releases=releases, 
@@ -118,7 +114,6 @@ async def get_repository(repo_id: int, db: Session = Depends(get_db), current_us
     return RepositoryModel(
             id=repo.id,
             name=repo.name,
-            plugin=json.loads(repo.plugin),
             full_name=repo.full_name,
             html_url=repo.html_url,
             releases=repo.releases, 
@@ -160,28 +155,6 @@ async def get_asset(asset_id: int, db: Session = Depends(get_db), current_user: 
         raise HTTPException(status_code=404, detail="Asset not found")
     return asset
 
-@app.get("/api/authors", response_model=List[AuthorModel], tags=["Authors"])
-async def get_authors(
-    skip: int = 0, 
-    limit: int = 100,
-    db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
-):
-    """
-    获取所有作者信息
-    """
-    authors = db.query(Author).offset(skip).limit(limit).all()
-    return authors
-
-@app.get("/api/authors/{author_id}", response_model=AuthorModel, tags=["Authors"])
-async def get_author(author_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
-    """
-    获取特定作者的详细信息
-    """
-    author = db.query(Author).filter(Author.id == author_id).first()
-    if not author:
-        raise HTTPException(status_code=404, detail="Author not found")
-    return author
 
 @app.get("/api/search/repositories", response_model=List[RepositoryBasicModel], tags=["Search"])
 async def search_repositories(

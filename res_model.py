@@ -59,7 +59,6 @@ class RepositoryBasicModel(BaseModel):
     name: str
     full_name: str
     html_url: str
-    plugin: Dict
     releases: List[str] = []
 
 class RepositoryModel(RepositoryBasicModel): 

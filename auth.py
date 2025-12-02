@@ -71,6 +71,7 @@ def callback(code: Optional[str] = None):
     return resp
 
 
+
 def get_current_user(request: Request):
     """Dependency: validate access token (cookie or Authorization header), persist it to Author, and return Author DB instance.
 
@@ -93,3 +94,14 @@ def get_current_user(request: Request):
         # refresh to ensure latest fields
         session.refresh(author)
         return author
+
+
+def get_admin(request: Request):
+    """Dependency: get current user and verify admin status.
+
+    Raises 403 if not admin. Returns SQLAlchemy `Author` instance on success.
+    """
+    author = get_current_user(request)
+    if not author.is_admin:
+        raise HTTPException(status_code=403, detail="Forbidden: admin access required")
+    return author
