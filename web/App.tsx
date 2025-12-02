@@ -47,6 +47,22 @@ function App() {
     }
   }, [user]);
 
+  useEffect(() => {
+    if (showInstallModal && user) {
+        const interval = setInterval(() => {
+            fetch('/api/repositories/installed_exists')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.installed_repo_exists === true) {
+                        setShowInstallModal(false);
+                    }
+                })
+                .catch(err => console.error("Failed to check installation status", err));
+        }, 1000);
+        return () => clearInterval(interval);
+    }
+  }, [showInstallModal, user]);
+
   // Simulating live logs for the demo
   useEffect(() => {
     const interval = setInterval(() => {
