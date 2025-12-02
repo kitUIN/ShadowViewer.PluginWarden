@@ -61,6 +61,10 @@ async def github_webhook(request: Request):
         
     return "skip"
 
+@app.get("/", name="root")
+async def root():
+    return {"message": "GitHub App is running!"}
+
 @app.get("/api/")
 async def health_check():
     return {"message": "GitHub App is running!"}

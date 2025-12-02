@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     app_id: str = Field()
     app_client_id: str = Field()
     app_client_secrets: str = Field()
+    app_redirect_uri: str = Field()
     webhook_token: str = Field()
     # Comma-separated GitHub logins that should be treated as admins on first login
     admin_github_logins: str = Field(default="")

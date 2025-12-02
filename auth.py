@@ -1,9 +1,8 @@
 from typing import Optional
 from urllib.parse import urlencode
-from datetime import datetime
 
 import requests
-from fastapi import APIRouter, Request, Response, HTTPException, Depends
+from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import RedirectResponse
 
 from config import settings
@@ -19,10 +18,9 @@ GITHUB_USER_API = "https://api.github.com/user"
 @router.get("/login")
 def login(request: Request):
     """Redirect user to GitHub OAuth authorize page."""
-    redirect_uri = str(request.url_for("auth_callback"))
     params = {
         "client_id": settings.app_client_id,
-        "redirect_uri": redirect_uri,
+        "redirect_uri":settings.app_redirect_uri,
         "scope": "read:user",
         "allow_signup": "false",
     }
