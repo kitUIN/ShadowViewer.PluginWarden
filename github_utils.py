@@ -8,7 +8,7 @@ from github.GithubException import GithubException
 from config import settings
 from loguru import logger
 
-from models import Repository, get_session, save_releases_to_db, Author
+from models import Repository, get_session, save_releases_to_db, Author, get_or_create_author
 
 g = Github(
     auth=Auth.AppAuth(settings.app_id,
@@ -146,6 +146,15 @@ def webhook_install(payload):
             repos = payload.get("repositories", []) or []
             logger.info(f"installation.created with {len(repos)} repositories")
             with get_session() as db:
+                # 尝试根据 installation.account 创建或获取 Author，并在导入 Repository 时绑定
+                installation = payload.get("installation") or {}
+                account = installation.get("account") if isinstance(installation, dict) else None
+                author = None
+                if account:
+                    try:
+                        author = get_or_create_author(db, account)
+                    except Exception as e:
+                        logger.error(f"Failed to get_or_create author for installation account: {e}")
                 for r in repos:
                     try:
                         full = r.get("full_name") or f"{r.get('owner', {}).get('login')}/{r.get('name')}"
@@ -155,13 +164,18 @@ def webhook_install(payload):
                                 id=r.get("id"),
                                 name=r.get("name"),
                                 full_name=r.get("full_name"),
-                                installed=True
+                                installed=True,
+                                author_id=author.id if author else None
                             )
                             db.add(repo)
                         else:
                             repo.installed = True
+                            # 如果有 installation 对应的 author，确保仓库记录与其绑定
+                            if author:
+                                repo.author_id = author.id
                     except Exception as e:
                         logger.error(f"Failed to upsert repository {r}: {e}")
+
                 db.commit()
             return "installation processed"
         elif action == "deleted":
@@ -176,20 +190,6 @@ def webhook_install(payload):
                             repo.installed = False
                     except Exception as e:
                         logger.error(f"Failed to mark repository {r} as uninstalled: {e}")
-
-                # 尝试删除 installation 所属账号的 token
-                installation = payload.get("installation") or {}
-                account = installation.get("account") if isinstance(installation, dict) else None
-                if account:
-                    try:
-                        author = db.query(Author).filter(Author.github_id == account.get("id")).first()
-                        if author:
-                            author.access_token = None
-                            author.token_scopes = None
-                            author.token_updated_at = None
-                    except Exception as e:
-                        logger.error(f"Failed to clear author token for account {account}: {e}")
-
                 db.commit()
             return "installation deleted processed"
     except Exception as e:
