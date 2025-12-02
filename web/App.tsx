@@ -3,13 +3,27 @@ import { LayoutDashboard, Store, GitBranch, Settings, Plus, Activity, Github } f
 import { MOCK_PLUGINS, MOCK_REPOS, MOCK_LOGS } from './constants';
 import { PluginCard } from './components/PluginCard';
 import { LogTerminal } from './components/LogTerminal';
+import { LoginPage } from './components/LoginPage';
 import { PluginData, RepositoryConfig, LogEntry } from './types';
 
 function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'store' | 'repos'>('dashboard');
   const [plugins] = useState<PluginData[]>(MOCK_PLUGINS);
   const [repos, setRepos] = useState<RepositoryConfig[]>(MOCK_REPOS);
   const [logs, setLogs] = useState<LogEntry[]>(MOCK_LOGS);
+
+  useEffect(() => {
+    fetch('/api/authors/me')
+      .then(res => {
+        if (res.ok) {
+          setIsAuthenticated(true);
+        } else {
+          setIsAuthenticated(false);
+        }
+      })
+      .catch(() => setIsAuthenticated(false));
+  }, []);
 
   // Simulating live logs for the demo
   useEffect(() => {
@@ -50,6 +64,14 @@ function App() {
          }]);
      }
   };
+
+  if (isAuthenticated === null) {
+    return <div className="flex items-center justify-center h-screen bg-slate-950 text-slate-200">Loading...</div>;
+  }
+
+  if (!isAuthenticated) {
+    return <LoginPage />;
+  }
 
   return (
     <div className="flex h-screen bg-slate-950 text-slate-200 font-sans selection:bg-indigo-500/30">
