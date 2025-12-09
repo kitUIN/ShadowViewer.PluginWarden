@@ -447,9 +447,9 @@ function App() {
                    <div className="bg-gradient-to-br from-indigo-900/50 to-slate-900 border border-indigo-500/30 p-6 rounded-xl">
                       <h3 className="font-bold text-lg text-white mb-2">ShadowViewer PluginStore</h3>
                       <p className="text-sm text-slate-300 mb-4">
-                        The automation service listens for Webhook events from configured repositories. When a release is detected, it downloads the assets, validates the <code className="bg-slate-950 px-1 rounded text-indigo-300">plugin.json</code>, and creates a Pull Request.
+                        ShadowViewer 插件商店专为 ShadowViewer App 提供，所有插件必须在 ShadowViewer 内安装后才能正常运行。
                       </p>
-                      <button onClick={() => setActiveTab('store')} className="text-sm text-indigo-400 hover:text-indigo-300 font-medium">View Store →</button>
+                      <a href="https://github.com/kitUIN/ShadowViewer/releases/latest" target="_blank" rel="noreferrer" className="text-sm text-indigo-400 hover:text-indigo-300 font-medium">点击前往下载地址 →</a>
                    </div>
                </div>
             </div>
