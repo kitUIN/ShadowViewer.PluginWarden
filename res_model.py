@@ -28,7 +28,6 @@ class AssetModel(BaseModel):
 
 class AuthorModel(BaseModel):
     id: int
-    github_id: int
     login: str
     avatar_url: str
     html_url: str
