@@ -129,7 +129,7 @@ def write_webhook_log(payload, event):
             author_data = payload.get("sender") or payload.get("release", {}).get("author") or payload.get("installation", {}).get("account") or {}
             author = None
             if author_data and author_data.get("id"):
-                author = db.query(Author).filter(Author.github_id == author_data.get("id")).first()
+                author = db.query(Author).filter(Author.id == author_data.get("id")).first()
 
             # try find repository full name
             repo_full = None

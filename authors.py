@@ -1,7 +1,7 @@
 
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException
-from requests import Session
+from sqlalchemy.orm import Session
 
 
 from auth import get_admin, get_current_user
@@ -17,12 +17,10 @@ def me(current_user: Author = Depends(get_current_user)):
     return current_user
 
 
-@router.get("/{author_id}", response_model=AuthorModel, tags=["Authors"])
-async def get_author(author_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_admin)):
-    """
-    获取特定作者的详细信息
-    """
-    author = db.query(Author).filter(Author.id == author_id).first()
+@router.get("/{github_id}", response_model=AuthorModel, tags=["Authors"])
+async def get_author(github_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_admin)):
+    """获取特定作者的详细信息（使用 GitHub ID）"""
+    author = db.query(Author).filter(Author.id == github_id).first()
     if not author:
         raise HTTPException(status_code=404, detail="Author not found")
     return author

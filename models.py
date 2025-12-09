@@ -113,7 +113,6 @@ class Author(Base):
     __tablename__ = 'authors'
     
     id = Column(Integer, primary_key=True)
-    github_id = Column(Integer, unique=True)
     login = Column(String(100), nullable=False)
     avatar_url = Column(String(255))
     html_url = Column(String(255))
@@ -130,7 +129,7 @@ class Author(Base):
     webhook_logs = relationship("WebhookLog", back_populates="author", cascade="all, delete-orphan")
     
     def __repr__(self):
-        return f"<Author(login='{self.login}', github_id={self.github_id})>"
+        return f"<Author(login='{self.login}', id={self.id})>"
 
 
 class Plugin(Base):
@@ -212,10 +211,10 @@ class WebhookLog(Base):
 
 # 创建或获取Author
 def get_or_create_author(session:Session, author_data, access_token: str = None, token_scopes: str = None, mark_admin: bool = False):
-    author = session.query(Author).filter_by(github_id=author_data['id']).first()
+    author = session.query(Author).filter_by(id=author_data['id']).first()
     if not author:
         author = Author(
-            github_id=author_data['id'],
+            id=author_data['id'],
             login=author_data.get('login'),
             avatar_url=author_data.get('avatar_url'),
             html_url=author_data.get('html_url'),
