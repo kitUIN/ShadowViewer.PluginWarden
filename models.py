@@ -155,7 +155,7 @@ class Plugin(Base):
     tags = relationship("PluginTag", back_populates="plugin", cascade="all, delete-orphan")
 
     raw_json = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
 
     # 关系
     release = relationship("Release", back_populates="plugin")
@@ -200,7 +200,7 @@ class WebhookLog(Base):
     event = Column(String(100), nullable=False)
     action = Column(String(100), nullable=True)
     payload = Column(Text)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
 
     # 关系
     author = relationship("Author", back_populates="webhook_logs")
@@ -226,7 +226,7 @@ def get_or_create_author(session:Session, author_data, access_token: str = None,
     # Update token info if provided
     if access_token:
         author.access_token = access_token
-        author.token_updated_at = datetime.utcnow()
+        author.token_updated_at = datetime.now()
     if token_scopes:
         author.token_scopes = token_scopes
     if mark_admin:

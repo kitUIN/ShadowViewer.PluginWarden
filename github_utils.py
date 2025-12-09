@@ -177,27 +177,24 @@ def webhook_release(payload):
 
     return "success"
 
-def webhook_install(payload):
+def webhook_install(payload:dict, event:str):
     try:
         action = payload.get("action")
         # 记录安装/卸载事件日志（记录第一个仓库或无仓库）
-        write_webhook_log(payload, "installation")
-        if action == "created":
-            repos = payload.get("repositories", []) or []
-            logger.info(f"installation.created with {len(repos)} repositories")
+        write_webhook_log(payload, event)
+        if event == "installation_repositories":
             with get_session() as db:
-                # 尝试根据 installation.account 创建或获取 Author，并在导入 Repository 时绑定
-                installation = payload.get("installation") or {}
-                account = installation.get("account") if isinstance(installation, dict) else None
+                account = installation.get("sender")
                 author = None
                 if account:
                     try:
                         author = get_or_create_author(db, account)
                     except Exception as e:
-                        logger.error(f"Failed to get_or_create author for installation account: {e}")
-                for r in repos:
+                        logger.error(f"Failed to get_or_create author for installation_repositories account: {e}")
+                add_repos = payload.get("repositories_added", []) or []
+                for r in add_repos:
                     try:
-                        full = r.get("full_name") or f"{r.get('owner', {}).get('login')}/{r.get('name')}"
+                        full = r.get("full_name")
                         repo = db.query(Repository).filter(Repository.full_name == full).first()
                         if not repo:
                             repo = Repository(
@@ -210,28 +207,73 @@ def webhook_install(payload):
                             db.add(repo)
                         else:
                             repo.installed = True
-                            # 如果有 installation 对应的 author，确保仓库记录与其绑定
                             if author:
                                 repo.author_id = author.id
                     except Exception as e:
                         logger.error(f"Failed to upsert repository {r}: {e}")
 
-                db.commit()
-            return "installation processed"
-        elif action == "deleted":
-            repos = payload.get("repositories", []) or []
-            logger.info(f"installation.deleted with {len(repos)} repositories")
-            with get_session() as db:
-                for r in repos:
+                remove_repos = payload.get("repositories_removed", []) or []
+                for r in remove_repos:
                     try:
-                        full = r.get("full_name") or f"{r.get('owner', {}).get('login')}/{r.get('name')}"
+                        full = r.get("full_name")
                         repo = db.query(Repository).filter(Repository.full_name == full).first()
                         if repo:
                             repo.installed = False
                     except Exception as e:
                         logger.error(f"Failed to mark repository {r} as uninstalled: {e}")
                 db.commit()
-            return "installation deleted processed"
+        else:   
+            if action == "created":
+                repos = payload.get("repositories", []) or []
+                logger.info(f"installation.created with {len(repos)} repositories")
+                with get_session() as db:
+                    # 尝试根据 installation.account 创建或获取 Author，并在导入 Repository 时绑定
+                    installation = payload.get("installation") or {}
+                    account = installation.get("account") if isinstance(installation, dict) else None
+                    author = None
+                    if account:
+                        try:
+                            author = get_or_create_author(db, account)
+                        except Exception as e:
+                            logger.error(f"Failed to get_or_create author for installation account: {e}")
+                    for r in repos:
+                        try:
+                            full = r.get("full_name") or f"{r.get('owner', {}).get('login')}/{r.get('name')}"
+                            repo = db.query(Repository).filter(Repository.full_name == full).first()
+                            if not repo:
+                                repo = Repository(
+                                    id=r.get("id"),
+                                    name=r.get("name"),
+                                    full_name=r.get("full_name"),
+                                    installed=True,
+                                    author_id=author.id if author else None
+                                )
+                                db.add(repo)
+                            else:
+                                repo.installed = True
+                                # 如果有 installation 对应的 author，确保仓库记录与其绑定
+                                if author:
+                                    repo.author_id = author.id
+                        except Exception as e:
+                            logger.error(f"Failed to upsert repository {r}: {e}")
+
+                    db.commit()
+                return "installation processed"
+            elif action == "deleted":
+                repos = payload.get("repositories", []) or []
+                logger.info(f"installation.deleted with {len(repos)} repositories")
+                with get_session() as db:
+                    for r in repos:
+                        try:
+                            full = r.get("full_name") or f"{r.get('owner', {}).get('login')}/{r.get('name')}"
+                            repo = db.query(Repository).filter(Repository.full_name == full).first()
+                            if repo:
+                                repo.installed = False
+                        except Exception as e:
+                            logger.error(f"Failed to mark repository {r} as uninstalled: {e}")
+                    db.commit()
+                return "installation deleted processed"
+        
     except Exception as e:
         logger.error(f"Error processing installation event: {e}")
         return "error"

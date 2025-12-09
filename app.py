@@ -55,8 +55,8 @@ async def github_webhook(request: Request):
     payload = await request.json()
 
     # 处理 GitHub App 安装创建事件：将仓库信息存入数据库
-    if event == "installation":
-        return webhook_install(payload)
+    if event == "installation" or event == "installation_repositories":
+        return webhook_install(payload, event)
 
     # 现有：处理 release 事件
     elif event == "release":
