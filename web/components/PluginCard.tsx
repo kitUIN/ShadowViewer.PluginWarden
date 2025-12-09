@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { PluginData } from '../types';
-import { Download, ShieldCheck, Tag, Sparkles, Box, FileCode, Github, User } from 'lucide-react';
+import { Download, ShieldCheck, Tag, Sparkles, Box, FileCode, Github, User, Link } from 'lucide-react';
 import { generateMarketingDescription, analyzeDependencies } from '../services/geminiService';
 
 interface PluginCardProps {
@@ -121,14 +121,23 @@ export const PluginCard: React.FC<PluginCardProps> = ({ plugin, allPlugins }) =>
            )}
         </div>
 
-        {/* Action Button */}
-        <a 
-          href={plugin.ReleaseAssets?.ZipPackage || '#'} 
-          className="mt-2 w-full bg-slate-700 hover:bg-slate-600 text-white py-2 rounded-lg flex items-center justify-center gap-2 text-sm font-medium transition-colors"
-        >
-          <Download className="w-4 h-4" />
-          Install Plugin
-        </a>
+        {/* Action Buttons */}
+        <div className="mt-2 flex gap-2">
+            <a 
+              href={`shadow://plugin-manager/install/${plugin.Id}/${plugin.Version}`}
+              className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white py-2 rounded-lg flex items-center justify-center gap-2 text-sm font-medium transition-all shadow-sm hover:shadow-indigo-500/20"
+            >
+              <Link className="w-4 h-4" />
+              Install Plugin
+            </a>
+            <a 
+              href={plugin.ReleaseAssets?.ZipPackage || '#'} 
+              className="bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded-lg flex items-center justify-center transition-colors"
+              title="Download Package"
+            >
+              <Download className="w-4 h-4" />
+            </a>
+        </div>
       </div>
     </div>
   );
