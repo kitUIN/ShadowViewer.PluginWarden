@@ -117,6 +117,8 @@ class Author(Base):
     is_admin = Column(Boolean, default=False, nullable=False)
     # 反向关系：一个Author可以有多个Repository
     repositories = relationship("Repository", back_populates="author", cascade="all, delete-orphan")
+    # 反向关系：Author 可以有多个 webhook 日志
+    webhook_logs = relationship("WebhookLog", back_populates="author", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<Author(login='{self.login}', github_id={self.github_id})>"
@@ -179,6 +181,25 @@ class PluginTag(Base):
 
     def __repr__(self):
         return f"<PluginTag(tag='{self.tag}')>"
+
+
+class WebhookLog(Base):
+    __tablename__ = 'webhook_logs'
+
+    id = Column(Integer, primary_key=True)
+    author_id = Column(Integer, ForeignKey('authors.id'), nullable=True)
+    repository_id = Column(Integer, ForeignKey('repositories.id'), nullable=True)
+    event = Column(String(100), nullable=False)
+    action = Column(String(100), nullable=True)
+    payload = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # 关系
+    author = relationship("Author", back_populates="webhook_logs")
+    repository = relationship("Repository")
+
+    def __repr__(self):
+        return f"<WebhookLog(event='{self.event}', action='{self.action}', author_id={self.author_id})>"
 
 # 创建或获取Author
 def get_or_create_author(session:Session, author_data, access_token: str = None, token_scopes: str = None, mark_admin: bool = False):

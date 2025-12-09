@@ -8,7 +8,7 @@ from github.GithubException import GithubException
 from config import settings
 from loguru import logger
 
-from models import Repository, get_session, save_releases_to_db, Author, get_or_create_author
+from models import Repository, get_session, save_releases_to_db, Author, get_or_create_author, WebhookLog
 
 g = Github(
     auth=Auth.AppAuth(settings.app_id,
@@ -123,6 +123,26 @@ def create_pr(assets):
 def webhook_release(payload):
     raw = payload["repository"]["full_name"].split("/",1)
     save_releases_to_db(raw[0], raw[1], [payload["release"]])
+    # 记录 webhook 日志
+    try:
+        with get_session() as db:
+            author_data = payload.get("sender") or payload.get("release", {}).get("author") or {}
+            author = None
+            if author_data and author_data.get("id"):
+                author = db.query(Author).filter(Author.github_id == author_data.get("id")).first()
+            full = f"{raw[0]}/{raw[1]}"
+            repo = db.query(Repository).filter(Repository.full_name == full).first()
+            log = WebhookLog(
+                author_id=author.id if author else None,
+                repository_id=repo.id if repo else None,
+                event="release",
+                action=payload.get("action"),
+                payload=json.dumps(payload),
+            )
+            db.add(log)
+            db.commit()
+    except Exception as e:
+        logger.error(f"Failed to write webhook log for release: {e}")
     # 如果仓库被监听，则触发 create_pr
     try:
         with get_session() as db:
@@ -142,6 +162,32 @@ def webhook_release(payload):
 def webhook_install(payload):
     try:
         action = payload.get("action")
+        # 记录安装/卸载事件日志（记录第一个仓库或无仓库）
+        try:
+            with get_session() as db_log:
+                installation = payload.get("installation") or {}
+                account = installation.get("account") if isinstance(installation, dict) else None
+                author = None
+                if account and account.get("id"):
+                    author = db_log.query(Author).filter(Author.github_id == account.get("id")).first()
+                repo_id = None
+                repos = payload.get("repositories", []) or []
+                if len(repos) > 0:
+                    rfull = repos[0].get("full_name") or f"{repos[0].get('owner', {{}}).get('login')}/{repos[0].get('name')}"
+                    r = db_log.query(Repository).filter(Repository.full_name == rfull).first()
+                    if r:
+                        repo_id = r.id
+                log = WebhookLog(
+                    author_id=author.id if author else None,
+                    repository_id=repo_id,
+                    event="installation",
+                    action=action,
+                    payload=json.dumps(payload),
+                )
+                db_log.add(log)
+                db_log.commit()
+        except Exception as e:
+            logger.error(f"Failed to write webhook log for installation: {e}")
         if action == "created":
             repos = payload.get("repositories", []) or []
             logger.info(f"installation.created with {len(repos)} repositories")
