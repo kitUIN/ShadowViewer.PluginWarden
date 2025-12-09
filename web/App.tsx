@@ -558,9 +558,30 @@ function App() {
                   {plugins.length === 0 && !pluginsLoading ? (
                     <div className="col-span-full text-center text-slate-500 py-12">No plugins available yet.</div>
                   ) : (
-                    plugins.map(plugin => (
-                    <PluginCard key={plugin.Id || plugin.Name || String(Math.random())} plugin={plugin} allPlugins={plugins} />
-                    ))
+                    // Group plugins by ID and only show the latest version, but pass all versions to the card
+                    Object.values(
+                      plugins.reduce((acc, plugin) => {
+                        if (!acc[plugin.Id]) {
+                          acc[plugin.Id] = [];
+                        }
+                        acc[plugin.Id].push(plugin);
+                        return acc;
+                      }, {} as Record<string, PluginData[]>)
+                    ).map((versions: PluginData[]) => {
+                      // Sort versions descending (assuming semantic versioning or simple string comparison works for now)
+                      // For robust semver sorting, a library like 'semver' would be better, but simple sort might suffice if format is consistent
+                      versions.sort((a, b) => b.Version.localeCompare(a.Version, undefined, { numeric: true, sensitivity: 'base' }));
+                      const latest = versions[0];
+                      
+                      return (
+                        <PluginCard 
+                          key={latest.Id} 
+                          plugin={latest} 
+                          allPlugins={plugins} 
+                          versions={versions}
+                        />
+                      );
+                    })
                   )}
                 </div>
             </div>
