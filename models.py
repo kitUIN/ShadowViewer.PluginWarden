@@ -69,6 +69,8 @@ class Release(Base):
     assets = relationship("Asset", back_populates="release", cascade="all, delete-orphan")
     # 与Author的关系
     author = relationship("Author")
+    # 与Plugin的一对一关系（每个 Release 对应一个 plugin.json）
+    plugin = relationship("Plugin", back_populates="release", uselist=False, cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<Release(tag_name='{self.tag_name}', name='{self.name}')>"
@@ -118,6 +120,65 @@ class Author(Base):
     
     def __repr__(self):
         return f"<Author(login='{self.login}', github_id={self.github_id})>"
+
+
+class Plugin(Base):
+    __tablename__ = 'plugins'
+
+    id = Column(Integer, primary_key=True)
+    plugin_id = Column(String(255), unique=True, nullable=True)
+    release_id = Column(Integer, ForeignKey('releases.id'), unique=True)
+
+    # 常用字段
+    name = Column(String(255), nullable=True)
+    version = Column(String(100), nullable=True)
+    description = Column(Text, nullable=True)
+    authors = Column(String(255), nullable=True)
+    web_uri = Column(String(255), nullable=True)
+    logo = Column(String(255), nullable=True)
+    sdk_version = Column(String(100), nullable=True)
+
+    # 复杂字段以 JSON 文本存储
+    # 关系字段：依赖和标签（一对多）
+    background_color = Column(String(50), nullable=True)
+    dependencies = relationship("Dependency", back_populates="plugin", cascade="all, delete-orphan")
+    tags = relationship("PluginTag", back_populates="plugin", cascade="all, delete-orphan")
+
+    raw_json = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # 关系
+    release = relationship("Release", back_populates="plugin")
+
+    def __repr__(self):
+        return f"<Plugin(plugin_id='{self.plugin_id}', name='{self.name}', version='{self.version}')>"
+
+
+class Dependency(Base):
+    __tablename__ = 'dependencies'
+
+    id = Column(Integer, primary_key=True)
+    plugin_id = Column(Integer, ForeignKey('plugins.id'))
+    dep_id = Column(String(255), nullable=False)
+    need = Column(String(100), nullable=True)
+
+    plugin = relationship("Plugin", back_populates="dependencies")
+
+    def __repr__(self):
+        return f"<Dependency(dep_id='{self.dep_id}', need='{self.need}')>"
+
+
+class PluginTag(Base):
+    __tablename__ = 'plugin_tags'
+
+    id = Column(Integer, primary_key=True)
+    plugin_id = Column(Integer, ForeignKey('plugins.id'))
+    tag = Column(String(100), nullable=False)
+
+    plugin = relationship("Plugin", back_populates="tags")
+
+    def __repr__(self):
+        return f"<PluginTag(tag='{self.tag}')>"
 
 # 创建或获取Author
 def get_or_create_author(session:Session, author_data, access_token: str = None, token_scopes: str = None, mark_admin: bool = False):
@@ -237,6 +298,48 @@ def save_releases_to_db(repo_owner, repo_name, releases_data=None):
                     uploader = None
                     if 'uploader' in asset_data and asset_data['uploader']:
                         uploader = get_or_create_author(session, asset_data['uploader'])
+                    # 如果是 plugin.json，下载并保存到 Plugin 表（与 Release 一对一）
+                    if asset_data.get('name') == 'plugin.json' and asset_data.get('browser_download_url'):
+                        plugin_text = plugin_json_download(asset_data['browser_download_url'])
+                        if plugin_text:
+                            try:
+                                plugin_data = json.loads(plugin_text)
+                            except Exception:
+                                plugin_data = None
+
+                            if plugin_data:
+                                # 创建或更新 Plugin 记录
+                                plugin_obj = session.query(Plugin).filter_by(release_id=release.id).first()
+                                if not plugin_obj:
+                                    plugin_obj = Plugin(release_id=release.id)
+                                    session.add(plugin_obj)
+
+                                plugin_obj.plugin_id = plugin_data.get('Id')
+                                plugin_obj.name = plugin_data.get('Name') or plugin_data.get('name')
+                                plugin_obj.version = plugin_data.get('Version')
+                                plugin_obj.description = plugin_data.get('Description')
+                                plugin_obj.authors = plugin_data.get('Authors')
+                                plugin_obj.web_uri = plugin_data.get('WebUri')
+                                plugin_obj.logo = plugin_data.get('Logo')
+                                plugin_obj.sdk_version = plugin_data.get('SdkVersion')
+                                # 处理 Dependencies（列表格式: [{"Id":..., "Need":...}, ...]）
+                                deps = plugin_data.get('Dependencies', []) or []
+                                plugin_obj.dependencies = []
+                                for d in deps:
+                                    dep_id = d.get('Id') or d.get('id')
+                                    need = d.get('Need') or d.get('Need')
+                                    if dep_id:
+                                        plugin_obj.dependencies.append(Dependency(dep_id=dep_id, need=need))
+
+                                # PluginStore 中的 Tag 和 BackgroundColor
+                                ps = plugin_data.get('PluginStore') or {}
+                                tags = ps.get('Tag', []) or []
+                                plugin_obj.tags = []
+                                for t in tags:
+                                    plugin_obj.tags.append(PluginTag(tag=t))
+
+                                plugin_obj.background_color = ps.get('BackgroundColor')
+                                plugin_obj.raw_json = plugin_text
                     
                     asset = Asset(
                         github_id=asset_data['id'],
@@ -266,6 +369,46 @@ def save_releases_to_db(repo_owner, repo_name, releases_data=None):
                 # 更新assets
                 for asset_data in release_data['assets']:
                     asset = session.query(Asset).filter_by(github_id=asset_data['id']).first()
+                    # 如果是 plugin.json，则下载并创建/更新 Plugin（与 Release 一对一）
+                    if asset_data.get('name') == 'plugin.json' and asset_data.get('browser_download_url'):
+                        plugin_text = plugin_json_download(asset_data['browser_download_url'])
+                        if plugin_text:
+                            try:
+                                plugin_data = json.loads(plugin_text)
+                            except Exception:
+                                plugin_data = None
+
+                            if plugin_data:
+                                plugin_obj = session.query(Plugin).filter_by(release_id=release.id).first()
+                                if not plugin_obj:
+                                    plugin_obj = Plugin(release_id=release.id)
+                                    session.add(plugin_obj)
+
+                                plugin_obj.plugin_id = plugin_data.get('Id')
+                                plugin_obj.name = plugin_data.get('Name') or plugin_data.get('name')
+                                plugin_obj.version = plugin_data.get('Version')
+                                plugin_obj.description = plugin_data.get('Description')
+                                plugin_obj.authors = plugin_data.get('Authors')
+                                plugin_obj.web_uri = plugin_data.get('WebUri')
+                                plugin_obj.logo = plugin_data.get('Logo')
+                                plugin_obj.sdk_version = plugin_data.get('SdkVersion')
+                                deps = plugin_data.get('Dependencies', []) or []
+                                plugin_obj.dependencies = []
+                                for d in deps:
+                                    dep_id = d.get('Id') or d.get('id')
+                                    need = d.get('Need') or d.get('Need')
+                                    if dep_id:
+                                        plugin_obj.dependencies.append(Dependency(dep_id=dep_id, need=need))
+
+                                ps = plugin_data.get('PluginStore') or {}
+                                tags = ps.get('Tag', []) or []
+                                plugin_obj.tags = []
+                                for t in tags:
+                                    plugin_obj.tags.append(PluginTag(tag=t))
+
+                                plugin_obj.background_color = ps.get('BackgroundColor')
+                                plugin_obj.raw_json = plugin_text
+
                     if not asset:
                         # 处理asset上传者信息
                         uploader = None
