@@ -1,14 +1,14 @@
 import json
 import os
 import time
-
+from sqlalchemy.orm import Session
 import requests
 from github import Github, Auth
 from github.GithubException import GithubException
 from config import settings
 from loguru import logger
 
-from models import Repository, get_session, save_releases_to_db, Author, get_or_create_author, WebhookLog
+from models import Repository, get_session, save_releases_to_db, Author, get_or_create_author, WebhookLog, write_webhook_log_with_db
 
 g = Github(
     auth=Auth.AppAuth(settings.app_id,
@@ -120,51 +120,13 @@ def create_pr(assets):
     logger.info(f"[{new_branch}]Merge Pr")
     new_branch_ref.delete()
 
-
-def write_webhook_log(payload, event):
-    """Write a webhook event into WebhookLog. Safe to call from webhook handlers."""
-    try:
-        with get_session() as db:
-            # try find author from common locations
-            author_data = payload.get("sender") or payload.get("release", {}).get("author") or payload.get("installation", {}).get("account") or {}
-            author = None
-            if author_data and author_data.get("id"):
-                author = db.query(Author).filter(Author.id == author_data.get("id")).first()
-
-            # try find repository full name
-            repo_full = None
-            if payload.get("repository"):
-                repo_full = payload["repository"].get("full_name")
-            else:
-                repos = payload.get("repositories", []) or []
-                if len(repos) > 0:
-                    repo_full = repos[0].get("full_name") or f"{repos[0].get('owner', {{}}).get('login')}/{repos[0].get('name')}"
-
-            repo = None
-            if repo_full:
-                repo = db.query(Repository).filter(Repository.full_name == repo_full).first()
-
-            log = WebhookLog(
-                author_id=author.id if author else None,
-                repository_id=repo.id if repo else None,
-                event=event,
-                action=payload.get("action"),
-                payload=json.dumps(payload),
-            )
-            db.add(log)
-            db.commit()
-    except Exception as e:
-        logger.error(f"Failed to write webhook log for {event}: {e}")
-
-def webhook_release(payload):
-    raw = payload["repository"]["full_name"].split("/",1)
-    save_releases_to_db(raw[0], raw[1], [payload["release"]])
-    # 记录 webhook 日志
-    write_webhook_log(payload, "release")
+def webhook_release(payload:dict, event:str):
+    full = payload["repository"]["full_name"]
+    action = payload.get("action")
+    save_releases_to_db(event,action, full, [payload["release"]])
     # 如果仓库被监听，则触发 create_pr
     try:
         with get_session() as db:
-            full = f"{raw[0]}/{raw[1]}"
             repo = db.query(Repository).filter(Repository.full_name == full).first()
             if repo and getattr(repo, 'watched', False):
                 try:
@@ -180,11 +142,9 @@ def webhook_release(payload):
 def webhook_install(payload:dict, event:str):
     try:
         action = payload.get("action")
-        # 记录安装/卸载事件日志（记录第一个仓库或无仓库）
-        write_webhook_log(payload, event)
         if event == "installation_repositories":
             with get_session() as db:
-                account = installation.get("sender")
+                account = payload.get("sender")
                 author = None
                 if account:
                     try:
@@ -205,10 +165,16 @@ def webhook_install(payload:dict, event:str):
                                 author_id=author.id if author else None
                             )
                             db.add(repo)
+                            db.flush()
                         else:
                             repo.installed = True
                             if author:
                                 repo.author_id = author.id
+                        write_webhook_log_with_db(db, repository_id=repo.id,
+                                          author_id=author.id if author else None,
+                                          event=event,
+                                          action=action,
+                                          payload=f"安装仓库: {repo.full_name}", level=3)
                     except Exception as e:
                         logger.error(f"Failed to upsert repository {r}: {e}")
 
@@ -219,6 +185,11 @@ def webhook_install(payload:dict, event:str):
                         repo = db.query(Repository).filter(Repository.full_name == full).first()
                         if repo:
                             repo.installed = False
+                        write_webhook_log_with_db(db, repository_id=repo.id,
+                                          author_id=author.id if author else None,
+                                          event=event,
+                                          action=action,
+                                          payload=f"取消安装仓库: {repo.full_name}", level=1)
                     except Exception as e:
                         logger.error(f"Failed to mark repository {r} as uninstalled: {e}")
                 db.commit()
@@ -249,11 +220,17 @@ def webhook_install(payload:dict, event:str):
                                     author_id=author.id if author else None
                                 )
                                 db.add(repo)
+                                db.flush()
                             else:
                                 repo.installed = True
                                 # 如果有 installation 对应的 author，确保仓库记录与其绑定
                                 if author:
                                     repo.author_id = author.id
+                            write_webhook_log_with_db(db, repository_id=repo.id,
+                                          author_id=author.id if author else None,
+                                          event=event,
+                                          action=action,
+                                          payload=f"安装仓库: {repo.full_name}", level=3)
                         except Exception as e:
                             logger.error(f"Failed to upsert repository {r}: {e}")
 
@@ -269,6 +246,11 @@ def webhook_install(payload:dict, event:str):
                             repo = db.query(Repository).filter(Repository.full_name == full).first()
                             if repo:
                                 repo.installed = False
+                            write_webhook_log_with_db(db, repository_id=repo.id,
+                                          author_id=author.id if author else None,
+                                          event=event,
+                                          action=action,
+                                          payload=f"取消安装仓库: {repo.full_name}", level=1)
                         except Exception as e:
                             logger.error(f"Failed to mark repository {r} as uninstalled: {e}")
                     db.commit()

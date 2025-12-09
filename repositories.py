@@ -2,7 +2,7 @@
 from math import ceil
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query
-from requests import Session
+from sqlalchemy.orm import Session
 
 
 from auth import get_current_user

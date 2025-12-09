@@ -201,7 +201,7 @@ class WebhookLog(Base):
     action = Column(String(100), nullable=True)
     payload = Column(Text)
     created_at = Column(DateTime, default=datetime.now)
-
+    level = Column(Integer, default=0)
     # 关系
     author = relationship("Author", back_populates="webhook_logs")
     repository = relationship("Repository")
@@ -372,11 +372,9 @@ def process_asset(session: Session, release: Release, asset_data: dict):
     return asset
 
 # 将GitHub release数据保存到数据库
-def save_releases_to_db(repo_owner:str, repo_name:str, releases_data:list=None):
-    if releases_data is None:
-        releases_data = fetch_github_releases(repo_owner,repo_name)
+def save_releases_to_db(event:str,action:str, full_name:str, releases_data:list):
     with get_session() as session:
-        repo = session.query(Repository).filter_by(full_name=f"{repo_owner}/{repo_name}").first()
+        repo = session.query(Repository).filter_by(full_name=full_name).first()
         if not repo:
             # 获取仓库信息
             repo_url = f'https://api.github.com/repos/{repo_owner}/{repo_name}'
@@ -444,8 +442,53 @@ def save_releases_to_db(repo_owner:str, repo_name:str, releases_data:list=None):
                 for asset_data in release_data['assets']:
                     process_asset(session, release, asset_data)
 
+            if action == "edited":
+                action_str = "编辑"
+            elif action == "published" or action == "released":
+                action_str = "发布"
+            elif action == "created":
+                action_str = "创建"
+            elif action == "deleted":
+                action_str = "删除"
+            else:
+                action_str = action
+            write_webhook_log_with_db(session, repository_id=repo.id,
+                                    author_id=author.id if author else None,
+                                    event=event,
+                                    action=action,
+                                    payload=f"仓库{full_name} {action_str}版本 {release_data['tag_name']}", level=1)
         session.commit()
 
+
+def write_webhook_log_with_db(db: Session, repository_id,author_id,event,action,payload,level=0):
+    try:
+        log = WebhookLog(
+            author_id=author_id,
+            repository_id=repository_id,
+            event=event,
+            action=action,
+            payload=payload,
+            level=level
+        )
+        db.add(log)
+    except Exception as e:
+        logger.error(f"Failed to write webhook log for {event}: {e}")
+
+def write_webhook_log(repository_id,author_id,event,action,payload,level=0):
+    try:
+        with get_session() as db:
+            log = WebhookLog(
+                author_id=author_id,
+                repository_id=repository_id,
+                event=event,
+                action=action,
+                payload=payload,
+                level=level
+            )
+            db.add(log)
+            db.commit()
+    except Exception as e:
+        logger.error(f"Failed to write webhook log for {event}: {e}")
 
 Base.metadata.create_all(engine)
 
