@@ -62,3 +62,21 @@ export interface LogEntry {
   level: 'info' | 'success' | 'warning' | 'error';
   message: string;
 }
+
+export interface RepositoryBasicModel {
+  id: number;
+  name: string;
+  full_name: string;
+  html_url: string;
+  watched: boolean;
+  releases: string[];
+  author?: Author;
+}
+
+export interface PaginatedResponse<T> {
+  total: number;
+  page: number;
+  limit: number;
+  pages: number;
+  items: T[];
+}

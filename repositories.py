@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from requests import Session
 
 
-from auth import get_admin, get_current_user
+from auth import get_current_user
 from models import Author, Release, Repository, get_db
 from res_model import *
 
@@ -31,15 +31,18 @@ async def installed_exists(
 async def search_repositories(
     q: str = Query(..., description="搜索关键词"),
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+    current_user: Author = Depends(get_current_user)
 ):
     """
     搜索仓库
     """
     search_term = f"%{q}%"
-    repositories = db.query(Repository).filter(
+    base_q = db.query(Repository).filter(
         Repository.name.like(search_term) | Repository.full_name.like(search_term)
-    ).all()
+    )
+    if not getattr(current_user, "is_admin", False):
+        base_q = base_q.filter(Repository.author_id == current_user.id)
+    repositories = base_q.all()
     
     result = []
     for repo in repositories:
@@ -49,7 +52,8 @@ async def search_repositories(
             name=repo.name,
             full_name=repo.full_name,
             html_url=repo.html_url,
-            release_count=release_count
+            release_count=release_count,
+            author=repo.author
         )
         result.append(repo_model)
     
@@ -62,15 +66,19 @@ async def get_repositories(
     page: int = Query(1, ge=1, description="页码（从1开始）"),
     limit: int = Query(10, ge=1, le=1000, description="每页条数"),
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+    current_user: Author = Depends(get_current_user)
 ):
     """
     分页获取仓库的基本信息列表
     """
-    total = db.query(Repository).count()
+    base_q = db.query(Repository)
+    if not getattr(current_user, "is_admin", False):
+        base_q = base_q.filter(Repository.author_id == current_user.id)
+
+    total = base_q.count()
     skip = (page - 1) * limit
     pages = ceil(total / limit) if total else 1
-    repositories = db.query(Repository).offset(skip).limit(limit).all()
+    repositories = base_q.offset(skip).limit(limit).all()
 
     items = []
     for repo in repositories: 
@@ -79,9 +87,11 @@ async def get_repositories(
         repo_model = RepositoryBasicModel(
             id=repo.id,
             name=repo.name,
+            watched=repo.watched,
             full_name=repo.full_name,
             html_url=repo.html_url,
-            releases=releases, 
+            releases=releases,
+            author=repo.author
         )
         items.append(repo_model)
 
@@ -95,17 +105,22 @@ async def get_repositories(
 
 
 @router.get("/{repo_id}", response_model=RepositoryModel, tags=["Repositories"])
-async def get_repository(repo_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+async def get_repository(repo_id: int, db: Session = Depends(get_db), current_user: Author = Depends(get_current_user)):
     """
     获取特定仓库的详细信息，包括所有发布版本
     """
     repo = db.query(Repository).filter(Repository.id == repo_id).first()
     if not repo:
         raise HTTPException(status_code=404, detail="Repository not found")
+    # 非管理员只能访问属于自己的仓库
+    if not getattr(current_user, "is_admin", False) and repo.author_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Forbidden")
     return RepositoryModel(
             id=repo.id,
             name=repo.name,
+            watched=repo.watched,
             full_name=repo.full_name,
             html_url=repo.html_url,
-            releases=repo.releases, 
+            releases=repo.releases,
+            author=repo.author
         )

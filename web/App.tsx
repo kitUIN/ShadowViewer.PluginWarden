@@ -5,14 +5,14 @@ import { PluginCard } from './components/PluginCard';
 import { LogTerminal } from './components/LogTerminal';
 import { LoginPage } from './components/LoginPage';
 import { UserMenu } from './components/UserMenu';
-import { PluginData, RepositoryConfig, LogEntry, Author } from './types';
+import { PluginData, RepositoryConfig, LogEntry, Author, RepositoryBasicModel, PaginatedResponse } from './types';
 
 function App() {
   const [user, setUser] = useState<Author | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'store' | 'repos'>('store');
   const [plugins] = useState<PluginData[]>(MOCK_PLUGINS);
-  const [repos, setRepos] = useState<RepositoryConfig[]>(MOCK_REPOS);
+  const [repos, setRepos] = useState<RepositoryBasicModel[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>(MOCK_LOGS);
   const [showInstallModal, setShowInstallModal] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
@@ -85,15 +85,32 @@ function App() {
     return () => clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    if (activeTab === 'repos' && user) {
+      fetch('/api/repositories/?page=1&limit=100')
+        .then(res => res.json())
+        .then((data: PaginatedResponse<RepositoryBasicModel>) => {
+          setRepos(data.items);
+        })
+        .catch(err => console.error("Failed to fetch repositories", err));
+    }
+  }, [activeTab, user]);
+
   const handleAddRepo = () => {
      const url = prompt("Enter GitHub Repository URL:");
      if (url) {
-         const newRepo: RepositoryConfig = {
-             id: Date.now().toString(),
-             url,
-             branch: 'main',
-             status: 'syncing',
-             lastCheck: 'Pending'
+         // Extract name and full_name from URL for mock display
+         const parts = url.split('/').filter(Boolean);
+         const name = parts[parts.length - 1] || 'unknown';
+         const full_name = parts.slice(-2).join('/') || name;
+
+         const newRepo: RepositoryBasicModel = {
+             id: Date.now(),
+             name,
+             full_name,
+             html_url: url,
+             watched: false,
+             releases: []
          };
          setRepos([...repos, newRepo]);
          setLogs(prev => [...prev, {
@@ -247,10 +264,10 @@ function App() {
                     <table className="w-full text-left text-sm">
                         <thead className="bg-slate-950/50 text-slate-400 font-medium border-b border-slate-800">
                             <tr>
-                                <th className="px-6 py-4">Repository URL</th>
-                                <th className="px-6 py-4">Branch</th>
+                                <th className="px-6 py-4">Repository Name</th>
+                                <th className="px-6 py-4">Author</th>
+                                <th className="px-6 py-4">Releases</th>
                                 <th className="px-6 py-4">Status</th>
-                                <th className="px-6 py-4">Last Check</th>
                                 <th className="px-6 py-4 text-right">Actions</th>
                             </tr>
                         </thead>
@@ -259,23 +276,38 @@ function App() {
                                 <tr key={repo.id} className="hover:bg-slate-800/50 transition-colors">
                                     <td className="px-6 py-4 flex items-center gap-2">
                                         <Github className="w-4 h-4 text-slate-500" />
-                                        <span className="font-mono text-slate-300">{repo.url.replace('https://github.com/', '')}</span>
+                                        <div className="flex flex-col">
+                                            <a href={repo.html_url} target="_blank" rel="noreferrer" className="font-mono text-slate-300 hover:text-indigo-400 transition-colors">{repo.name}</a>
+                                            <span className="text-xs text-slate-500">{repo.full_name}</span>
+                                        </div>
                                     </td>
-                                    <td className="px-6 py-4 text-slate-400">{repo.branch}</td>
                                     <td className="px-6 py-4">
-                                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border ${
-                                            repo.status === 'active' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
-                                            repo.status === 'syncing' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
-                                            'bg-red-500/10 text-red-400 border-red-500/20'
-                                        }`}>
-                                            <span className={`w-1.5 h-1.5 rounded-full ${
-                                                repo.status === 'active' ? 'bg-emerald-500' :
-                                                repo.status === 'syncing' ? 'bg-blue-500 animate-pulse' : 'bg-red-500'
-                                            }`}></span>
-                                            {repo.status}
+                                        {repo.author ? (
+                                            <div className="flex items-center gap-2">
+                                                <img src={repo.author.avatar_url} alt={repo.author.login} className="w-6 h-6 rounded-full" />
+                                                <span className="text-slate-400">{repo.author.login}</span>
+                                            </div>
+                                        ) : (
+                                            <span className="text-slate-600">-</span>
+                                        )}
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                                            {repo.releases.length} Releases
                                         </span>
                                     </td>
-                                    <td className="px-6 py-4 text-slate-500">{repo.lastCheck}</td>
+                                    <td className="px-6 py-4">
+                                        {repo.watched ? (
+                                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                                Watched
+                                            </span>
+                                        ) : (
+                                            <button className="px-3 py-1 text-xs font-medium bg-indigo-600 hover:bg-indigo-500 text-white rounded-md transition-colors">
+                                                Apply
+                                            </button>
+                                        )}
+                                    </td>
                                     <td className="px-6 py-4 text-right">
                                         <button className="text-slate-400 hover:text-white transition-colors">Edit</button>
                                     </td>
