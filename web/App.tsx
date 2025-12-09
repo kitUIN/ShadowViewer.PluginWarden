@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { LayoutDashboard, Store, GitBranch, Settings, Plus, Activity, Github, Eye, EyeOff, Send } from 'lucide-react';
+import { LayoutDashboard, Store, GitBranch, Settings, Plus, Activity, Github, Eye, EyeOff, Send, RefreshCw } from 'lucide-react';
 import { MOCK_PLUGINS, MOCK_REPOS, MOCK_LOGS } from './constants';
 import { PluginCard } from './components/PluginCard';
 import { LogTerminal } from './components/LogTerminal';
@@ -372,7 +372,19 @@ function App() {
       <main className="flex-1 overflow-auto relative">
         <header className="sticky top-0 z-10 bg-slate-950/80 backdrop-blur-md border-b border-slate-800 px-8 py-4 flex justify-between items-center">
             {user ? (
-              <h2 className="text-xl font-semibold text-white capitalize">{activeTab.replace('-', ' ')}</h2>
+              <div className="flex items-center gap-3">
+                <h2 className="text-xl font-semibold text-white capitalize">{activeTab.replace('-', ' ')}</h2>
+                {activeTab === 'store' && (
+                  <button
+                    onClick={() => fetchStorePlugins()}
+                    disabled={pluginsLoading}
+                    title="刷新插件列表"
+                    className="ml-2 flex items-center justify-center w-8 h-8 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-60 transition-colors"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
             ) : (
               <div className="flex items-center gap-3">
                 <img src="/app.png" alt="Logo" className="w-8 h-8 rounded shadow-lg shadow-indigo-500/20" />
@@ -539,11 +551,7 @@ function App() {
           {activeTab === 'store' && (
             <div className="space-y-6">
                 <div className="flex items-center justify-between">
-                    <div className="flex gap-2">
-                        <button onClick={() => fetchStorePlugins()} disabled={pluginsLoading} className="text-xs bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded text-slate-300 border border-slate-700 disabled:opacity-60">
-                          {pluginsLoading ? 'Refreshing...' : 'Refresh'}
-                        </button>
-                    </div>
+                    <p className="text-slate-400">Browse available plugins in the store.</p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">

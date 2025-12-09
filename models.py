@@ -466,7 +466,7 @@ def save_releases_to_db(event:str,action:str, full_name:str, releases_data:list)
                                     author_id=author.id if author else None,
                                     event=event,
                                     action=action,
-                                    payload=f"仓库{full_name} {action_str}版本 {release_data['tag_name']}", level=1)
+                                    payload=f"仓库 {full_name} {action_str}版本 {release_data['tag_name']}", level=1)
         session.commit()
 
 
