@@ -187,15 +187,15 @@ async def get_stats(db: Session = Depends(get_db), current_user: Author = Depend
     """
     try:
         if current_user.is_admin:
-            # 仅统计关联到被标记为 watched 的仓库的插件
-            total_plugins = db.query(Plugin).join(Plugin.repository).filter(Repository.watched == True).count()
+            # 仅统计关联到被标记为 watched 的仓库的插件，且 Release 为 visible
+            total_plugins = db.query(Plugin).join(Plugin.repository).join(Plugin.release).filter(Repository.watched == True, Release.visible == True).count()
             installed_repos = db.query(Repository).filter(Repository.installed == True).count()
             watched_repos = db.query(Repository).filter(Repository.watched == True).count()
         else:
             installed_repos = db.query(Repository).filter(Repository.author_id == current_user.id, Repository.installed == True).count()
             watched_repos = db.query(Repository).filter(Repository.author_id == current_user.id, Repository.watched == True).count()
-            # 仅统计属于当前用户且被 watched 的仓库下的 plugins
-            total_plugins = db.query(Plugin).join(Plugin.repository).filter(Repository.author_id == current_user.id, Repository.watched == True).count()
+            # 仅统计属于当前用户且被 watched 的仓库下的 plugins，且 Release 为 visible
+            total_plugins = db.query(Plugin).join(Plugin.repository).join(Plugin.release).filter(Repository.author_id == current_user.id, Repository.watched == True, Release.visible == True).count()
 
         return {
             "total_plugins": int(total_plugins or 0),
