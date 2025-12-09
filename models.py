@@ -270,6 +270,108 @@ def plugin_json_download(browser_download_url):
         print(f"Error fetching {browser_download_url}: {response.status_code}")
         return None
 
+
+def process_asset(session: Session, release: Release, asset_data: dict):
+    """Create or update an Asset record and handle plugin.json if present.
+
+    This unifies logic used for both new releases and existing releases.
+    """
+    # Handle plugin.json specially (download and populate Plugin)
+    if asset_data.get('name') == 'plugin.json' and asset_data.get('browser_download_url'):
+        plugin_text = plugin_json_download(asset_data['browser_download_url'])
+        if plugin_text:
+            try:
+                plugin_data = json.loads(plugin_text)
+            except Exception:
+                plugin_data = None
+
+            if plugin_data:
+                plugin_obj = session.query(Plugin).filter_by(release_id=release.id).first()
+                if not plugin_obj:
+                    plugin_obj = Plugin(release_id=release.id)
+                    session.add(plugin_obj)
+
+                plugin_obj.plugin_id = plugin_data.get('Id')
+                plugin_obj.name = plugin_data.get('Name') or plugin_data.get('name')
+                plugin_obj.version = plugin_data.get('Version')
+                plugin_obj.description = plugin_data.get('Description')
+                plugin_obj.authors = plugin_data.get('Authors')
+                plugin_obj.web_uri = plugin_data.get('WebUri')
+                plugin_obj.logo = plugin_data.get('Logo')
+                plugin_obj.sdk_version = plugin_data.get('SdkVersion')
+
+                deps = plugin_data.get('Dependencies', []) or []
+                plugin_obj.dependencies = []
+                for d in deps:
+                    dep_id = d.get('Id') or d.get('id')
+                    need = d.get('Need') or d.get('need')
+                    if dep_id:
+                        plugin_obj.dependencies.append(Dependency(dep_id=dep_id, need=need))
+
+                ps = plugin_data.get('PluginStore') or {}
+                tags = ps.get('Tag', []) or []
+                plugin_obj.tags = []
+                for t in tags:
+                    plugin_obj.tags.append(PluginTag(tag=t))
+
+                plugin_obj.background_color = ps.get('BackgroundColor')
+                plugin_obj.raw_json = plugin_text
+
+    # Find existing asset by github_id
+    asset = session.query(Asset).filter_by(
+        release_id=release.id,
+        name=asset_data.get('name'),
+        ).first()
+    if not asset:
+        uploader = None
+        if 'uploader' in asset_data and asset_data['uploader']:
+            uploader = get_or_create_author(session, asset_data['uploader'])
+
+        created_at = None
+        updated_at = None
+        try:
+            if asset_data.get('created_at'):
+                created_at = get_local_time(asset_data['created_at'])
+        except Exception:
+            created_at = None
+        try:
+            if asset_data.get('updated_at'):
+                updated_at = get_local_time(asset_data['updated_at'])
+        except Exception:
+            updated_at = None
+
+        asset = Asset(
+            github_id=asset_data['id'],
+            release_id=release.id,
+            uploader_id=uploader.id if uploader else None,
+            name=asset_data.get('name'),
+            label=asset_data.get('label'),
+            content_type=asset_data.get('content_type'),
+            state=asset_data.get('state'),
+            size=asset_data.get('size'),
+            download_count=asset_data.get('download_count'),
+            created_at=created_at,
+            updated_at=updated_at,
+            browser_download_url=asset_data.get('browser_download_url')
+        )
+        session.add(asset)
+    else:
+        # update existing asset fields
+        asset.name = asset_data.get('name')
+        asset.label = asset_data.get('label')
+        asset.content_type = asset_data.get('content_type')
+        asset.state = asset_data.get('state')
+        asset.size = asset_data.get('size')
+        asset.download_count = asset_data.get('download_count')
+        asset.browser_download_url = asset_data.get('browser_download_url')
+        try:
+            if asset_data.get('updated_at'):
+                asset.updated_at = get_local_time(asset_data['updated_at'])
+        except Exception:
+            pass
+
+    return asset
+
 # 将GitHub release数据保存到数据库
 def save_releases_to_db(repo_owner:str, repo_name:str, releases_data:list=None):
     if releases_data is None:
@@ -327,68 +429,7 @@ def save_releases_to_db(repo_owner:str, repo_name:str, releases_data:list=None):
                 
                 # 处理assets
                 for asset_data in release_data['assets']:
-                    # 处理asset上传者信息
-                    uploader = None
-                    if 'uploader' in asset_data and asset_data['uploader']:
-                        uploader = get_or_create_author(session, asset_data['uploader'])
-                    # 如果是 plugin.json，下载并保存到 Plugin 表（与 Release 一对一）
-                    if asset_data.get('name') == 'plugin.json' and asset_data.get('browser_download_url'):
-                        plugin_text = plugin_json_download(asset_data['browser_download_url'])
-                        if plugin_text:
-                            try:
-                                plugin_data = json.loads(plugin_text)
-                            except Exception:
-                                plugin_data = None
-
-                            if plugin_data:
-                                # 创建或更新 Plugin 记录
-                                plugin_obj = session.query(Plugin).filter_by(release_id=release.id).first()
-                                if not plugin_obj:
-                                    plugin_obj = Plugin(release_id=release.id)
-                                    session.add(plugin_obj)
-
-                                plugin_obj.plugin_id = plugin_data.get('Id')
-                                plugin_obj.name = plugin_data.get('Name') or plugin_data.get('name')
-                                plugin_obj.version = plugin_data.get('Version')
-                                plugin_obj.description = plugin_data.get('Description')
-                                plugin_obj.authors = plugin_data.get('Authors')
-                                plugin_obj.web_uri = plugin_data.get('WebUri')
-                                plugin_obj.logo = plugin_data.get('Logo')
-                                plugin_obj.sdk_version = plugin_data.get('SdkVersion')
-                                # 处理 Dependencies（列表格式: [{"Id":..., "Need":...}, ...]）
-                                deps = plugin_data.get('Dependencies', []) or []
-                                plugin_obj.dependencies = []
-                                for d in deps:
-                                    dep_id = d.get('Id') or d.get('id')
-                                    need = d.get('Need') or d.get('Need')
-                                    if dep_id:
-                                        plugin_obj.dependencies.append(Dependency(dep_id=dep_id, need=need))
-
-                                # PluginStore 中的 Tag 和 BackgroundColor
-                                ps = plugin_data.get('PluginStore') or {}
-                                tags = ps.get('Tag', []) or []
-                                plugin_obj.tags = []
-                                for t in tags:
-                                    plugin_obj.tags.append(PluginTag(tag=t))
-
-                                plugin_obj.background_color = ps.get('BackgroundColor')
-                                plugin_obj.raw_json = plugin_text
-                    
-                    asset = Asset(
-                        github_id=asset_data['id'],
-                        release_id=release.id,
-                        uploader_id=uploader.id if uploader else None,
-                        name=asset_data['name'],
-                        label=asset_data['label'],
-                        content_type=asset_data['content_type'],
-                        state=asset_data['state'],
-                        size=asset_data['size'],
-                        download_count=asset_data['download_count'],
-                        created_at=datetime.strptime(asset_data['created_at'], '%Y-%m-%dT%H:%M:%SZ'),
-                        updated_at=datetime.strptime(asset_data['updated_at'], '%Y-%m-%dT%H:%M:%SZ'),
-                        browser_download_url=asset_data['browser_download_url']
-                    )
-                    session.add(asset)
+                    process_asset(session, release, asset_data)
             else:
                 # 更新已存在的release
                 release.github_id=release_data['id']
@@ -402,76 +443,7 @@ def save_releases_to_db(repo_owner:str, repo_name:str, releases_data:list=None):
                 
                 # 更新assets
                 for asset_data in release_data['assets']:
-                    asset = session.query(Asset).filter_by(github_id=asset_data['id']).first()
-                    # 如果是 plugin.json，则下载并创建/更新 Plugin（与 Release 一对一）
-                    if asset_data.get('name') == 'plugin.json' and asset_data.get('browser_download_url'):
-                        plugin_text = plugin_json_download(asset_data['browser_download_url'])
-                        if plugin_text:
-                            try:
-                                plugin_data = json.loads(plugin_text)
-                            except Exception:
-                                plugin_data = None
-
-                            if plugin_data:
-                                plugin_obj = session.query(Plugin).filter_by(release_id=release.id).first()
-                                if not plugin_obj:
-                                    plugin_obj = Plugin(release_id=release.id)
-                                    session.add(plugin_obj)
-
-                                plugin_obj.plugin_id = plugin_data.get('Id')
-                                plugin_obj.name = plugin_data.get('Name') or plugin_data.get('name')
-                                plugin_obj.version = plugin_data.get('Version')
-                                plugin_obj.description = plugin_data.get('Description')
-                                plugin_obj.authors = plugin_data.get('Authors')
-                                plugin_obj.web_uri = plugin_data.get('WebUri')
-                                plugin_obj.logo = plugin_data.get('Logo')
-                                plugin_obj.sdk_version = plugin_data.get('SdkVersion')
-                                deps = plugin_data.get('Dependencies', []) or []
-                                plugin_obj.dependencies = []
-                                for d in deps:
-                                    dep_id = d.get('Id') or d.get('id')
-                                    need = d.get('Need') or d.get('Need')
-                                    if dep_id:
-                                        plugin_obj.dependencies.append(Dependency(dep_id=dep_id, need=need))
-
-                                ps = plugin_data.get('PluginStore') or {}
-                                tags = ps.get('Tag', []) or []
-                                plugin_obj.tags = []
-                                for t in tags:
-                                    plugin_obj.tags.append(PluginTag(tag=t))
-
-                                plugin_obj.background_color = ps.get('BackgroundColor')
-                                plugin_obj.raw_json = plugin_text
-
-                    if not asset:
-                        # 处理asset上传者信息
-                        uploader = None
-                        if 'uploader' in asset_data and asset_data['uploader']:
-                            uploader = get_or_create_author(session, asset_data['uploader'])
-                        
-                        # 创建新asset
-                        asset = Asset(
-                            github_id=asset_data['id'],
-                            release_id=release.id,
-                            uploader_id=uploader.id if uploader else None,
-                            name=asset_data['name'],
-                            label=asset_data['label'],
-                            content_type=asset_data['content_type'],
-                            state=asset_data['state'],
-                            size=asset_data['size'],
-                            download_count=asset_data['download_count'],
-                            created_at=get_local_time(asset_data['created_at']),
-                            updated_at=get_local_time(asset_data['updated_at']),
-                            browser_download_url=asset_data['browser_download_url']
-                        )
-                        session.add(asset)
-                    else:
-                        # 更新已存在的asset
-                        asset.name = asset_data['name']
-                        asset.label = asset_data['label']
-                        asset.state = asset_data['state']
-                        asset.download_count = asset_data['download_count']
-                        asset.updated_at = get_local_time(asset_data['updated_at'])
+                    process_asset(session, release, asset_data)
 
         session.commit()
 
