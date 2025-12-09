@@ -3,8 +3,17 @@ from loguru import logger
 import requests
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, ForeignKey, Text, BigInteger, text
 from sqlalchemy.orm import relationship, sessionmaker,declarative_base,Session
-from datetime import datetime
 import os
+from datetime import datetime, timezone, timedelta
+
+def get_local_time(time_str) -> datetime:
+    # 原始 UTC 时间
+    dt_utc = datetime.strptime(time_str, '%Y-%m-%dT%H:%M:%SZ')
+    dt_utc = dt_utc.replace(tzinfo=timezone.utc)
+
+    # 转换为北京时间 (UTC+8)
+    dt_local = dt_utc.astimezone(timezone(timedelta(hours=8)))
+    return dt_local
 
 # 创建SQLAlchemy基类
 Base = declarative_base()
@@ -262,7 +271,7 @@ def plugin_json_download(browser_download_url):
         return None
 
 # 将GitHub release数据保存到数据库
-def save_releases_to_db(repo_owner, repo_name, releases_data=None):
+def save_releases_to_db(repo_owner:str, repo_name:str, releases_data:list=None):
     if releases_data is None:
         releases_data = fetch_github_releases(repo_owner,repo_name)
     with get_session() as session:
@@ -292,7 +301,10 @@ def save_releases_to_db(repo_owner, repo_name, releases_data=None):
                 author = get_or_create_author(session, release_data['author'])
             
             # 检查release是否已存在
-            release = session.query(Release).filter_by(github_id=release_data['id']).first()
+            release = session.query(Release).filter_by(
+                repository_id=repo.id,
+                tag_name=release_data['tag_name']
+                ).first()
             if not release:
                 # 创建新release
                 release = Release(
@@ -304,8 +316,8 @@ def save_releases_to_db(repo_owner, repo_name, releases_data=None):
                     body=release_data['body'],
                     draft=release_data['draft'],
                     prerelease=release_data['prerelease'],
-                    created_at=datetime.strptime(release_data['created_at'], '%Y-%m-%dT%H:%M:%SZ'),
-                    published_at=datetime.strptime(release_data['published_at'], '%Y-%m-%dT%H:%M:%SZ') if release_data['published_at'] else None,
+                    created_at=get_local_time(release_data['created_at']),
+                    published_at=get_local_time(release_data['published_at']) if release_data['published_at'] else None,
                     html_url=release_data['html_url'],
                     tarball_url=release_data['tarball_url'],
                     zipball_url=release_data['zipball_url']
@@ -379,6 +391,7 @@ def save_releases_to_db(repo_owner, repo_name, releases_data=None):
                     session.add(asset)
             else:
                 # 更新已存在的release
+                release.github_id=release_data['id']
                 release.tag_name = release_data['tag_name']
                 release.name = release_data['name']
                 release.body = release_data['body']
@@ -447,8 +460,8 @@ def save_releases_to_db(repo_owner, repo_name, releases_data=None):
                             state=asset_data['state'],
                             size=asset_data['size'],
                             download_count=asset_data['download_count'],
-                            created_at=datetime.strptime(asset_data['created_at'], '%Y-%m-%dT%H:%M:%SZ'),
-                            updated_at=datetime.strptime(asset_data['updated_at'], '%Y-%m-%dT%H:%M:%SZ'),
+                            created_at=get_local_time(asset_data['created_at']),
+                            updated_at=get_local_time(asset_data['updated_at']),
                             browser_download_url=asset_data['browser_download_url']
                         )
                         session.add(asset)
@@ -458,7 +471,7 @@ def save_releases_to_db(repo_owner, repo_name, releases_data=None):
                         asset.label = asset_data['label']
                         asset.state = asset_data['state']
                         asset.download_count = asset_data['download_count']
-                        asset.updated_at = datetime.strptime(asset_data['updated_at'], '%Y-%m-%dT%H:%M:%SZ')
+                        asset.updated_at = get_local_time(asset_data['updated_at'])
 
         session.commit()
 
