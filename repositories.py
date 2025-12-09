@@ -2,6 +2,7 @@
 from math import ceil
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 
@@ -124,3 +125,44 @@ async def get_repository(repo_id: int, db: Session = Depends(get_db), current_us
             releases=repo.releases,
             author=repo.author
         )
+
+
+class WatchedUpdate(BaseModel):
+    watched: bool
+
+
+@router.patch("/{repo_id}/watched", response_model=RepositoryBasicModel, tags=["Repositories"])
+async def update_repo_watched(
+    repo_id: int,
+    payload: WatchedUpdate,
+    db: Session = Depends(get_db),
+    current_user: Author = Depends(get_current_user)
+):
+    """
+    Update the `watched` flag for a repository. Only the repository owner or an admin can modify this flag.
+    """
+    repo = db.query(Repository).filter(Repository.id == repo_id).first()
+    if not repo:
+        raise HTTPException(status_code=404, detail="Repository not found")
+
+    # Permission: only admin or owner may modify
+    if not getattr(current_user, "is_admin", False) and repo.author_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    repo.watched = bool(payload.watched)
+    db.add(repo)
+    db.commit()
+    db.refresh(repo)
+
+    # Build releases list as tag names for basic model
+    releases = [t for t, in db.query(Release).filter(Release.repository_id == repo.id).values(Release.tag_name)]
+
+    return RepositoryBasicModel(
+        id=repo.id,
+        name=repo.name,
+        full_name=repo.full_name,
+        html_url=repo.html_url,
+        watched=repo.watched,
+        releases=releases,
+        author=repo.author
+    )

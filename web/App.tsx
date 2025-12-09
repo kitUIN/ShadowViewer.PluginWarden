@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { LayoutDashboard, Store, GitBranch, Settings, Plus, Activity, Github, Eye, Send } from 'lucide-react';
+import { LayoutDashboard, Store, GitBranch, Settings, Plus, Activity, Github, Eye, EyeOff, Send } from 'lucide-react';
 import { MOCK_PLUGINS, MOCK_REPOS, MOCK_LOGS } from './constants';
 import { PluginCard } from './components/PluginCard';
 import { LogTerminal } from './components/LogTerminal';
@@ -17,6 +17,8 @@ function App() {
   const [showInstallModal, setShowInstallModal] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const [confirmingRepo, setConfirmingRepo] = useState<RepositoryBasicModel | null>(null);
+  const [confirmingWatchedValue, setConfirmingWatchedValue] = useState<boolean>(true);
+  const [isUpdatingWatched, setIsUpdatingWatched] = useState<boolean>(false);
 
   useEffect(() => {
     fetch('/api/authors/me')
@@ -121,6 +123,55 @@ function App() {
              message: `Added new repository to monitor: ${url}`
          }]);
      }
+  };
+
+  const updateRepoWatched = async (repoId: number, watched: boolean) => {
+    try {
+      setIsUpdatingWatched(true);
+      const res = await fetch(`/api/repositories/${repoId}/watched`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ watched })
+      });
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(`Failed to update watched: ${res.status} ${txt}`);
+      }
+      const data = await res.json();
+
+      // Refresh repository list from server to ensure latest data
+      await fetchRepos();
+
+      setLogs(prev => [...prev, {
+        id: Date.now().toString(),
+        timestamp: new Date().toLocaleTimeString(),
+        level: 'info',
+        message: `${watched ? 'Started' : 'Stopped'} watching repository ${data.full_name}`
+      }]);
+      setConfirmingRepo(null);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to update watch state. See console for details.');
+    } finally {
+      setIsUpdatingWatched(false);
+    }
+  };
+
+  const fetchRepos = async () => {
+    try {
+      const res = await fetch('/api/repositories/?page=1&limit=100');
+      if (!res.ok) {
+        console.error('Failed to fetch repositories', await res.text());
+        return;
+      }
+      const data = await res.json();
+      // Expecting PaginatedResponse<RepositoryBasicModel>
+      if (data && data.items) {
+        setRepos(data.items);
+      }
+    } catch (err) {
+      console.error('Error fetching repositories', err);
+    }
   };
 
   if (isLoading) {
@@ -298,23 +349,38 @@ function App() {
                                         </span>
                                     </td>
                                     <td className="px-6 py-4">
-                                        {repo.watched ? (
-                                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                                                <Eye className="w-3 h-3" />
-                                                Watched
-                                            </span>
-                                        ) : (
-                                            <button 
-                                                onClick={() => setConfirmingRepo(repo)}
-                                                className="px-3 py-1 text-xs font-medium bg-indigo-600 hover:bg-indigo-500 text-white rounded-md transition-colors flex items-center gap-1"
-                                            >
-                                                <Send className="w-3 h-3" />
-                                                Need Apply
-                                            </button>
-                                        )}
+                                      {repo.watched ? (
+                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                          <Eye className="w-3 h-3" />
+                                          Watched
+                                        </span>
+                                      ) : (
+                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                                          <Send className="w-3 h-3" />
+                                          Needs Apply
+                                        </span>
+                                      )}
                                     </td>
                                     <td className="px-6 py-4 text-right">
-                                        <button className="text-slate-400 hover:text-white transition-colors">Edit</button>
+                                      <div className="flex items-center justify-end gap-3">
+                                          {!repo.watched ? (
+                                              <button
+                                                  onClick={() => { setConfirmingRepo(repo); setConfirmingWatchedValue(true); }}
+                                                  className="px-3 py-1 text-xs font-medium bg-indigo-600 hover:bg-indigo-500 text-white rounded-md transition-colors flex items-center gap-1"
+                                              >
+                                                  <Send className="w-3 h-3" />
+                                                  Apply
+                                              </button>
+                                          ) : (
+                                              <button
+                                                  onClick={() => { setConfirmingRepo(repo); setConfirmingWatchedValue(false); }}
+                                                  className="px-3 py-1 text-xs font-medium bg-red-600 hover:bg-red-500 text-white rounded-md transition-colors flex items-center gap-1"
+                                              >
+                                                  <EyeOff className="w-3 h-3" />
+                                                  Unwatch
+                                              </button>
+                                          )}
+                                      </div>
                                     </td>
                                 </tr>
                             ))}
@@ -390,26 +456,29 @@ function App() {
       {confirmingRepo && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-md w-full shadow-2xl shadow-indigo-500/10">
-                <h3 className="text-xl font-bold text-white mb-4">Confirm Application</h3>
+                <h3 className="text-xl font-bold text-white mb-4">{confirmingWatchedValue ? 'Confirm Application' : 'Confirm Unwatch'}</h3>
                 <p className="text-slate-400 mb-6 leading-relaxed">
-                    Please confirm to apply the current repository <span className="text-indigo-400 font-mono">{confirmingRepo.name}</span> as a plugin. If successful, releases published by this repository will be automatically merged into the Plugin Store as new versions.
+                  {confirmingWatchedValue ? (
+                    <>Please confirm to apply the current repository <span className="text-indigo-400 font-mono">{confirmingRepo.name}</span> as a plugin. If successful, releases published by this repository will be automatically merged into the Plugin Store as new versions.</>
+                  ) : (
+                    <>Please confirm to stop watching the repository <span className="text-indigo-400 font-mono">{confirmingRepo.name}</span>. If successful, releases from this repository will no longer be automatically merged into the Plugin Store.</>
+                  )}
                 </p>
                 <div className="flex gap-3 justify-end">
-                    <button 
-                        onClick={() => setConfirmingRepo(null)}
-                        className="px-4 py-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
-                    >
-                        Cancel
-                    </button>
-                    <button 
-                        onClick={() => {
-                            // TODO: Implement actual apply logic here
-                            setConfirmingRepo(null);
-                        }}
-                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium transition-colors shadow-lg shadow-indigo-500/20"
-                    >
-                        Confirm Apply
-                    </button>
+                  <button 
+                    onClick={() => setConfirmingRepo(null)}
+                    disabled={isUpdatingWatched}
+                    className="px-4 py-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    onClick={() => confirmingRepo && updateRepoWatched(confirmingRepo.id, confirmingWatchedValue)}
+                    disabled={isUpdatingWatched}
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium transition-colors shadow-lg shadow-indigo-500/20 disabled:opacity-50"
+                  >
+                    {confirmingWatchedValue ? 'Confirm Apply' : 'Confirm Unwatch'}
+                  </button>
                 </div>
             </div>
         </div>
