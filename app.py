@@ -2,13 +2,14 @@ import json
 from math import ceil
 from typing import List
 from fastapi import Depends, FastAPI, Query, Request, HTTPException
+from datetime import datetime, timedelta
 from fastapi_swagger import patch_fastapi
 from loguru import logger
 import hashlib
 import hmac
 
 import uvicorn
-from models import get_db, Session,Repository,Author,Asset,Release, save_releases_to_db
+from models import get_db, Session,Repository,Author,Asset,Release,WebhookLog, save_releases_to_db
 from github_utils import create_pr, webhook_install, webhook_release
 from res_model import *
 from auth import  router as auth_router, get_current_user
@@ -110,6 +111,35 @@ async def get_asset(asset_id: int, db: Session = Depends(get_db), current_user: 
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
     return asset
+
+
+@app.get("/api/webhook_logs", response_model=List[WebhookLogModel], tags=["WebhookLogs"])
+async def get_webhook_logs(
+    db: Session = Depends(get_db),
+    current_user: Author = Depends(get_current_user),
+    day: str = Query(None, description="Date in YYYY-MM-DD format. Defaults to today."),
+):
+    """
+    获取 webhook 日志：普通用户仅能看到与自身相关的日志，管理员可查看全部。
+    支持按 `day` 查询（YYYY-MM-DD），默认当天。
+    """
+    # Determine the date to filter (default to today)
+    if day:
+        try:
+            day_date = datetime.strptime(day, "%Y-%m-%d").date()
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
+    else:
+        day_date = datetime.now().date()
+
+    start_dt = datetime(day_date.year, day_date.month, day_date.day)
+    end_dt = start_dt + timedelta(days=1)
+
+    query = db.query(WebhookLog).filter(WebhookLog.created_at >= start_dt, WebhookLog.created_at < end_dt).order_by(WebhookLog.created_at.desc())
+    if not current_user.is_admin:
+        query = query.filter(WebhookLog.author_id == current_user.id)
+    logs = query.all()
+    return logs
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8100)

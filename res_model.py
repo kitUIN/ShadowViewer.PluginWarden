@@ -66,3 +66,15 @@ class RepositoryBasicModel(BaseModel):
 class RepositoryModel(RepositoryBasicModel): 
     releases: List[ReleaseModel] = []
     model_config = ConfigDict(from_attributes=True)
+
+
+class WebhookLogModel(BaseModel):
+    id: int
+    author: Optional[AuthorModel] = None
+    repository: Optional[RepositoryBasicModel] = None
+    event: str
+    action: Optional[str] = None
+    payload: Optional[str] = None
+    created_at: datetime
+    level: int = 0
+    model_config = ConfigDict(from_attributes=True)
