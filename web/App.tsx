@@ -11,7 +11,8 @@ function App() {
   const [user, setUser] = useState<Author | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'store' | 'repos'>('store');
-  const [plugins] = useState<PluginData[]>(MOCK_PLUGINS);
+  const [plugins, setPlugins] = useState<PluginData[]>(MOCK_PLUGINS);
+  const [pluginsLoading, setPluginsLoading] = useState<boolean>(false);
   const [repos, setRepos] = useState<RepositoryBasicModel[]>([]);
   const [stats, setStats] = useState<{ total_plugins: number; installed_repos: number; watched_repos: number }>({ total_plugins: MOCK_PLUGINS.length, installed_repos: 0, watched_repos: 0 });
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -147,6 +148,34 @@ function App() {
         .catch(err => console.error("Failed to fetch repositories", err));
     }
   }, [activeTab, user]);
+
+  const fetchStorePlugins = async (page = 1, limit = 40) => {
+    try {
+      setPluginsLoading(true);
+      const res = await fetch(`/api/store/plugins?page=${page}&limit=${limit}`);
+      if (!res.ok) {
+        console.error('Failed to fetch store plugins', await res.text());
+        setPluginsLoading(false);
+        return;
+      }
+      const data = await res.json();
+      if (data && Array.isArray(data.items)) {
+        setPlugins(data.items as PluginData[]);
+      } else {
+        setPlugins([]);
+      }
+    } catch (err) {
+      console.error('Error fetching store plugins', err);
+    } finally {
+      setPluginsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'store') {
+      fetchStorePlugins();
+    }
+  }, [activeTab]);
 
   const fetchStats = async () => {
     if (!user) return;
@@ -510,24 +539,21 @@ function App() {
           {activeTab === 'store' && (
             <div className="space-y-6">
                 <div className="flex items-center justify-between">
-                    <p className="text-slate-400">This is how the `plugins.json` data renders for end-users.</p>
                     <div className="flex gap-2">
-                        <button className="text-xs bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded text-slate-300 border border-slate-700">Refresh Data</button>
+                        <button onClick={() => fetchStorePlugins()} disabled={pluginsLoading} className="text-xs bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded text-slate-300 border border-slate-700 disabled:opacity-60">
+                          {pluginsLoading ? 'Refreshing...' : 'Refresh'}
+                        </button>
                     </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                    {plugins.map(plugin => (
-                        <PluginCard key={plugin.Id} plugin={plugin} allPlugins={plugins} />
-                    ))}
-                    
-                    {/* Empty State / Add New Placeholder */}
-                    <button onClick={handleAddRepo} className="border-2 border-dashed border-slate-800 rounded-xl flex flex-col items-center justify-center gap-3 text-slate-600 hover:text-indigo-400 hover:border-indigo-500/30 hover:bg-slate-900 transition-all min-h-[300px] group">
-                        <div className="w-12 h-12 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center group-hover:scale-110 transition-transform">
-                            <Plus className="w-6 h-6" />
-                        </div>
-                        <span className="font-medium">Wait for new Release</span>
-                    </button>
+                  {plugins.length === 0 && !pluginsLoading ? (
+                    <div className="col-span-full text-center text-slate-500 py-12">No plugins available yet.</div>
+                  ) : (
+                    plugins.map(plugin => (
+                    <PluginCard key={plugin.Id || plugin.Name || String(Math.random())} plugin={plugin} allPlugins={plugins} />
+                    ))
+                  )}
                 </div>
             </div>
           )}

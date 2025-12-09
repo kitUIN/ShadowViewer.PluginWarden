@@ -79,3 +79,42 @@ class WebhookLogModel(BaseModel):
     created_at: datetime
     level: int = 0
     model_config = ConfigDict(from_attributes=True)
+
+
+class PluginDependencyModel(BaseModel):
+    Id: str
+    Need: Optional[str] = None
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AffiliationTagModel(BaseModel):
+    Name: str
+    BackgroundHex: Optional[str] = "#111827"
+    ForegroundHex: Optional[str] = "#FFFFFF"
+    Icon: Optional[str] = ""
+    PluginId: Optional[str] = None
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ReleaseAssetsModel(BaseModel):
+    PluginJson: Optional[str] = None
+    ZipPackage: Optional[str] = None
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PluginModel(BaseModel):
+    Id: Optional[str]
+    Name: Optional[str]
+    Version: Optional[str]
+    Description: Optional[str]
+    Authors: Optional[str]
+    WebUri: Optional[str]
+    Logo: Optional[str]
+    PluginManage: Optional[Dict] = None
+    AffiliationTag: AffiliationTagModel
+    SdkVersion: Optional[str]
+    DllName: Optional[str] = None
+    Dependencies: List[PluginDependencyModel] = []
+    ReleaseAssets: Optional[ReleaseAssetsModel] = None
+    LastUpdated: Optional[str] = None
+    model_config = ConfigDict(from_attributes=True)

@@ -283,6 +283,7 @@ def process_asset(session: Session, release: Release, asset_data: dict):
     if asset_data.get('name') == 'plugin.json' and asset_data.get('browser_download_url'):
         plugin_text = plugin_json_download(asset_data['browser_download_url'])
         if plugin_text:
+            plugin_text = plugin_text.replace("ms-plugin://", f"https://raw.githubusercontent.com/{release.repository.full_name}/{release.tag_name}/")
             try:
                 plugin_data = json.loads(plugin_text)
             except Exception:
@@ -386,7 +387,7 @@ def save_releases_to_db(event:str,action:str, full_name:str, releases_data:list)
         repo = session.query(Repository).filter_by(full_name=full_name).first()
         if not repo:
             # 获取仓库信息
-            repo_url = f'https://api.github.com/repos/{repo_owner}/{repo_name}'
+            repo_url = f'https://api.github.com/repos/{full_name}'
             repo_response = requests.get(repo_url)
             if repo_response.status_code == 200:
                 repo_data = repo_response.json()

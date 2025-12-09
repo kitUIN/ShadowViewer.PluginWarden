@@ -36,7 +36,7 @@ export const PluginCard: React.FC<PluginCardProps> = ({ plugin, allPlugins }) =>
   };
 
   return (
-    <div className="bg-slate-800 rounded-xl border border-slate-700 hover:border-indigo-500/50 transition-all duration-300 overflow-hidden flex flex-col">
+    <div style={{ width: 'calc(100% + 50px)' }} className="bg-slate-800 rounded-xl border border-slate-700 hover:border-indigo-500/50 transition-all duration-300 overflow-hidden flex flex-col">
       {/* Header / Banner */}
       <div className="h-24 w-full relative overflow-hidden" style={{ backgroundColor: plugin.AffiliationTag.BackgroundHex }}>
          <div className="absolute inset-0 bg-black/10"></div>
