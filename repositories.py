@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 
 from auth import get_current_user
-from models import Author, Release, Repository, get_db
+from models import Author, Release, Repository, get_db, write_webhook_log_with_db
 from res_model import *
 
 
@@ -151,6 +151,9 @@ async def update_repo_watched(
 
     repo.watched = bool(payload.watched)
     db.add(repo)
+    write_webhook_log_with_db(db, repository_id=repo.id,
+                              author_id=current_user.id, event="",action="",
+                              payload=f"设置仓库{repo.full_name} 自动合并插件商店状态为 {repo.watched}")
     db.commit()
     db.refresh(repo)
 

@@ -13,7 +13,7 @@ function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'store' | 'repos'>('store');
   const [plugins] = useState<PluginData[]>(MOCK_PLUGINS);
   const [repos, setRepos] = useState<RepositoryBasicModel[]>([]);
-  const [logs, setLogs] = useState<LogEntry[]>(MOCK_LOGS);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
   const [showInstallModal, setShowInstallModal] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const [confirmingRepo, setConfirmingRepo] = useState<RepositoryBasicModel | null>(null);
@@ -68,25 +68,72 @@ function App() {
     }
   }, [showInstallModal, user]);
 
-  // Simulating live logs for the demo
+  // Fetch webhook logs from backend and map numeric level to UI level strings
+  const mapLevel = (levelNum: number) => {
+    switch (levelNum) {
+      case 1:
+        return 'warning' as const;
+      case 2:
+        return 'error' as const;
+      case 3:
+        return 'success' as const;
+      case 0:
+      default:
+        return 'info' as const;
+    }
+  };
+
+  const fetchWebhookLogs = async (day?: string) => {
+    try {
+      const qs = day ? `?day=${encodeURIComponent(day)}` : '';
+      const res = await fetch(`/api/webhook_logs${qs}`);
+      if (!res.ok) {
+        console.error('Failed to fetch webhook logs', await res.text());
+        return;
+      }
+      const data = await res.json();
+      // backend returns array of WebhookLogModel
+      const mapped: LogEntry[] = (data || []).map((l: any) => ({
+        id: String(l.id),
+        timestamp: l.created_at ? new Date(l.created_at).toLocaleTimeString() : new Date().toLocaleTimeString(),
+        level: mapLevel(typeof l.level === 'number' ? l.level : 0),
+        message: l.payload || `${l.event}${l.action ? `:${l.action}` : ''}${l.repository && l.repository.full_name ? ` (${l.repository.full_name})` : ''}`
+      }));
+
+      // Merge previous logs with newly fetched logs, dedupe by id (keep newest occurrence),
+      // keep order oldest->newest and limit to last 50 entries (最新在最下面)
+      setLogs(prev => {
+        const combined = [...prev, ...mapped];
+        const seen = new Set<string>();
+        const rev: LogEntry[] = [];
+        // iterate from newest to oldest so we keep the newest occurrence
+        for (let i = combined.length - 1; i >= 0; i--) {
+          const item = combined[i];
+          if (!seen.has(item.id)) {
+            seen.add(item.id);
+            rev.push(item);
+          }
+        }
+        // rev currently newest->oldest, reverse to oldest->newest and keep last 50
+        return rev.reverse().slice(-50);
+      });
+    } catch (err) {
+      console.error('Error fetching webhook logs', err);
+    }
+  };
+
   useEffect(() => {
-    const interval = setInterval(() => {
-        const actions = [
-            { level: 'info', message: 'Heartbeat: Checking for new releases...' },
-            { level: 'info', message: 'Syncing repository metadata...' },
-        ] as const;
-        const action = actions[Math.floor(Math.random() * actions.length)];
-        
-        const newLog: LogEntry = {
-            id: Date.now().toString(),
-            timestamp: new Date().toLocaleTimeString(),
-            level: action.level,
-            message: action.message
-        };
-        setLogs(prev => [...prev.slice(-50), newLog]);
-    }, 8000);
-    return () => clearInterval(interval);
-  }, []);
+    if (!user) return;
+    let interval: any | null = null;
+    // fetch immediately when dashboard opened
+    if (activeTab === 'dashboard') {
+      fetchWebhookLogs();
+      interval = setInterval(() => fetchWebhookLogs(), 5000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [activeTab, user]);
 
   useEffect(() => {
     if (activeTab === 'repos' && user) {
@@ -142,12 +189,6 @@ function App() {
       // Refresh repository list from server to ensure latest data
       await fetchRepos();
 
-      setLogs(prev => [...prev, {
-        id: Date.now().toString(),
-        timestamp: new Date().toLocaleTimeString(),
-        level: 'info',
-        message: `${watched ? 'Started' : 'Stopped'} watching repository ${data.full_name}`
-      }]);
       setConfirmingRepo(null);
     } catch (err) {
       console.error(err);

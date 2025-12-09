@@ -135,7 +135,8 @@ async def get_webhook_logs(
     start_dt = datetime(day_date.year, day_date.month, day_date.day)
     end_dt = start_dt + timedelta(days=1)
 
-    query = db.query(WebhookLog).filter(WebhookLog.created_at >= start_dt, WebhookLog.created_at < end_dt).order_by(WebhookLog.created_at.desc())
+    # Return logs ordered from oldest -> newest (ascending) so frontend can display small->large
+    query = db.query(WebhookLog).filter(WebhookLog.created_at >= start_dt, WebhookLog.created_at < end_dt).order_by(WebhookLog.created_at.asc())
     if not current_user.is_admin:
         query = query.filter(WebhookLog.author_id == current_user.id)
     logs = query.all()
