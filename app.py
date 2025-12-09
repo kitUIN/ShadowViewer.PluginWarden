@@ -9,7 +9,7 @@ import hashlib
 import hmac
 
 import uvicorn
-from models import get_db, Session,Repository,Author,Asset,Release,WebhookLog,Plugin, save_releases_to_db
+from models import get_db, Session,Repository,Author,Asset,Release,WebhookLog,Plugin, save_releases_to_db, write_webhook_log_with_db
 from github_utils import create_pr, webhook_install, webhook_release
 from res_model import *
 from auth import  router as auth_router, get_current_user
@@ -101,6 +101,38 @@ async def get_release_assets(
     
     assets = db.query(Asset).filter(Asset.release_id == release_id).all()
     return assets
+
+
+@app.patch("/api/releases/{release_id}/visible", tags=["Releases"])
+async def set_release_visible(release_id: int, request: Request, db: Session = Depends(get_db), current_user: Author = Depends(get_current_user)):
+    """
+    更新 Release 的 `visible` 字段。只有管理员或仓库所属作者可以修改可见性。
+    请求体: { "visible": true|false }
+    """
+    body = await request.json()
+    if 'visible' not in body:
+        raise HTTPException(status_code=400, detail="Missing 'visible' in request body")
+    visible = bool(body.get('visible'))
+
+    release = db.query(Release).filter(Release.id == release_id).first()
+    if not release:
+        raise HTTPException(status_code=404, detail="Release not found")
+
+    # permission check: admin or repository owner
+    repo = db.query(Repository).filter(Repository.id == release.repository_id).first()
+    if not current_user.is_admin:
+        if not repo or repo.author_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Not authorized to change release visibility")
+
+    release.visible = visible
+    db.add(release)
+    write_webhook_log_with_db(db, repository_id=repo.id,
+                              author_id=current_user.id, event="",action="",
+                              payload=f"设置仓库 {repo.full_name} 版本 {release.tag_name} 可见状态为 {release.visible}")
+    db.commit()
+    db.refresh(release)
+
+    return {"id": release.id, "visible": release.visible}
 
 @app.get("/api/assets/{asset_id}", response_model=AssetModel, tags=["Assets"])
 async def get_asset(asset_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):

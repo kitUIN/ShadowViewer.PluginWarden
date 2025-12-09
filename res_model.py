@@ -47,6 +47,7 @@ class ReleaseModel(BaseModel):
     html_url: str
     tarball_url: str
     zipball_url: str
+    visible: bool = True
     assets: List[AssetModel] = []
     author: Optional[AuthorModel] = None
     model_config = ConfigDict(from_attributes=True)

@@ -71,6 +71,8 @@ class Release(Base):
     html_url = Column(String(255))
     tarball_url = Column(String(255))
     zipball_url = Column(String(255))
+    # 是否在插件商店中可见（用于控制插件是否对外展示）
+    visible = Column(Boolean, default=True, nullable=False)
     
     # 与Repository的关系
     repository = relationship("Repository", back_populates="releases")

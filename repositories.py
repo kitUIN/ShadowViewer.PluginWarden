@@ -151,7 +151,7 @@ async def update_repo_watched(
     db.add(repo)
     write_webhook_log_with_db(db, repository_id=repo.id,
                               author_id=current_user.id, event="",action="",
-                              payload=f"设置仓库{repo.full_name} 自动合并插件商店状态为 {repo.watched}")
+                              payload=f"设置仓库 {repo.full_name} 插件可见状态为 {repo.watched}")
     db.commit()
     db.refresh(repo)
 
