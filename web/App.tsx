@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { LayoutDashboard, Store, GitBranch, Settings, Plus, Activity, Github } from 'lucide-react';
+import { LayoutDashboard, Store, GitBranch, Settings, Plus, Activity, Github, Eye, Send } from 'lucide-react';
 import { MOCK_PLUGINS, MOCK_REPOS, MOCK_LOGS } from './constants';
 import { PluginCard } from './components/PluginCard';
 import { LogTerminal } from './components/LogTerminal';
@@ -16,6 +16,7 @@ function App() {
   const [logs, setLogs] = useState<LogEntry[]>(MOCK_LOGS);
   const [showInstallModal, setShowInstallModal] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
+  const [confirmingRepo, setConfirmingRepo] = useState<RepositoryBasicModel | null>(null);
 
   useEffect(() => {
     fetch('/api/authors/me')
@@ -299,12 +300,16 @@ function App() {
                                     <td className="px-6 py-4">
                                         {repo.watched ? (
                                             <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                                <Eye className="w-3 h-3" />
                                                 Watched
                                             </span>
                                         ) : (
-                                            <button className="px-3 py-1 text-xs font-medium bg-indigo-600 hover:bg-indigo-500 text-white rounded-md transition-colors">
-                                                Apply
+                                            <button 
+                                                onClick={() => setConfirmingRepo(repo)}
+                                                className="px-3 py-1 text-xs font-medium bg-indigo-600 hover:bg-indigo-500 text-white rounded-md transition-colors flex items-center gap-1"
+                                            >
+                                                <Send className="w-3 h-3" />
+                                                Need Apply
                                             </button>
                                         )}
                                     </td>
@@ -378,6 +383,35 @@ function App() {
               You'll be redirected to GitHub to select repositories.
             </p>
           </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal */}
+      {confirmingRepo && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-md w-full shadow-2xl shadow-indigo-500/10">
+                <h3 className="text-xl font-bold text-white mb-4">Confirm Application</h3>
+                <p className="text-slate-400 mb-6 leading-relaxed">
+                    Please confirm to apply the current repository <span className="text-indigo-400 font-mono">{confirmingRepo.name}</span> as a plugin. If successful, releases published by this repository will be automatically merged into the Plugin Store as new versions.
+                </p>
+                <div className="flex gap-3 justify-end">
+                    <button 
+                        onClick={() => setConfirmingRepo(null)}
+                        className="px-4 py-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+                    >
+                        Cancel
+                    </button>
+                    <button 
+                        onClick={() => {
+                            // TODO: Implement actual apply logic here
+                            setConfirmingRepo(null);
+                        }}
+                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium transition-colors shadow-lg shadow-indigo-500/20"
+                    >
+                        Confirm Apply
+                    </button>
+                </div>
+            </div>
         </div>
       )}
     </div>
