@@ -9,7 +9,7 @@ import hashlib
 import hmac
 
 import uvicorn
-from models import get_db, Session,Repository,Author,Asset,Release,WebhookLog, save_releases_to_db
+from models import get_db, Session,Repository,Author,Asset,Release,WebhookLog,Plugin, save_releases_to_db
 from github_utils import create_pr, webhook_install, webhook_release
 from res_model import *
 from auth import  router as auth_router, get_current_user
@@ -61,7 +61,7 @@ async def github_webhook(request: Request):
 
     # 现有：处理 release 事件
     elif event == "release":
-       return webhook_release(payload) 
+       return webhook_release(payload, event) 
         
     return "skip"
 
@@ -141,6 +141,38 @@ async def get_webhook_logs(
         query = query.filter(WebhookLog.author_id == current_user.id)
     logs = query.all()
     return logs
+
+
+@app.get("/api/stats", tags=["Stats"])
+async def get_stats(db: Session = Depends(get_db), current_user: Author = Depends(get_current_user)):
+    """
+    返回三个仪表盘统计项：
+    - total_plugins: 已解析并保存到插件表的 plugin.json 数量
+    - installed_repos: 已安装的仓库数量 (Repository.installed == True)
+    - watched_repos: 被标记为 watched 的仓库数量 (Repository.watched == True)
+
+    管理员返回全局统计，普通用户仅返回与其相关的统计。
+    """
+    try:
+        if current_user.is_admin:
+            # 仅统计关联到被标记为 watched 的仓库的插件
+            total_plugins = db.query(Plugin).join(Plugin.repository).filter(Repository.watched == True).count()
+            installed_repos = db.query(Repository).filter(Repository.installed == True).count()
+            watched_repos = db.query(Repository).filter(Repository.watched == True).count()
+        else:
+            installed_repos = db.query(Repository).filter(Repository.author_id == current_user.id, Repository.installed == True).count()
+            watched_repos = db.query(Repository).filter(Repository.author_id == current_user.id, Repository.watched == True).count()
+            # 仅统计属于当前用户且被 watched 的仓库下的 plugins
+            total_plugins = db.query(Plugin).join(Plugin.repository).filter(Repository.author_id == current_user.id, Repository.watched == True).count()
+
+        return {
+            "total_plugins": int(total_plugins or 0),
+            "installed_repos": int(installed_repos or 0),
+            "watched_repos": int(watched_repos or 0),
+        }
+    except Exception as e:
+        logger.exception("Failed to compute stats")
+        raise HTTPException(status_code=500, detail="Failed to compute stats")
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8100)

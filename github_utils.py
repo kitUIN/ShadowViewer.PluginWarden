@@ -124,19 +124,6 @@ def webhook_release(payload:dict, event:str):
     full = payload["repository"]["full_name"]
     action = payload.get("action")
     save_releases_to_db(event,action, full, [payload["release"]])
-    # 如果仓库被监听，则触发 create_pr
-    try:
-        with get_session() as db:
-            repo = db.query(Repository).filter(Repository.full_name == full).first()
-            if repo and getattr(repo, 'watched', False):
-                try:
-                    assets = payload["release"].get("assets", [])
-                    create_pr(assets)
-                except Exception as e:
-                    logger.error(f"create_pr failed: {e}")
-    except Exception as e:
-        logger.error(f"Error checking repository watched status: {e}")
-
     return "success"
 
 def webhook_install(payload:dict, event:str):

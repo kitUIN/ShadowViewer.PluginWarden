@@ -83,15 +83,13 @@ async def get_repositories(
 
     items = []
     for repo in repositories: 
-        releases = [t for t, in db.query(Release).filter(Release.repository_id == repo.id).values(Release.tag_name)]
-        print(releases)
         repo_model = RepositoryBasicModel(
             id=repo.id,
             name=repo.name,
             watched=repo.watched,
             full_name=repo.full_name,
             html_url=repo.html_url,
-            releases=releases,
+            releases=repo.releases,
             author=repo.author
         )
         items.append(repo_model)
@@ -157,15 +155,12 @@ async def update_repo_watched(
     db.commit()
     db.refresh(repo)
 
-    # Build releases list as tag names for basic model
-    releases = [t for t, in db.query(Release).filter(Release.repository_id == repo.id).values(Release.tag_name)]
-
     return RepositoryBasicModel(
         id=repo.id,
         name=repo.name,
         full_name=repo.full_name,
         html_url=repo.html_url,
         watched=repo.watched,
-        releases=releases,
+        releases=repo.releases,
         author=repo.author
     )

@@ -13,6 +13,7 @@ function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'store' | 'repos'>('store');
   const [plugins] = useState<PluginData[]>(MOCK_PLUGINS);
   const [repos, setRepos] = useState<RepositoryBasicModel[]>([]);
+  const [stats, setStats] = useState<{ total_plugins: number; installed_repos: number; watched_repos: number }>({ total_plugins: MOCK_PLUGINS.length, installed_repos: 0, watched_repos: 0 });
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [showInstallModal, setShowInstallModal] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
@@ -144,6 +145,37 @@ function App() {
         })
         .catch(err => console.error("Failed to fetch repositories", err));
     }
+  }, [activeTab, user]);
+
+  const fetchStats = async () => {
+    if (!user) return;
+    try {
+      const res = await fetch('/api/stats');
+      if (!res.ok) {
+        console.error('Failed to fetch stats', await res.text());
+        return;
+      }
+      const data = await res.json();
+      setStats({
+        total_plugins: typeof data.total_plugins === 'number' ? data.total_plugins : 0,
+        installed_repos: typeof data.installed_repos === 'number' ? data.installed_repos : 0,
+        watched_repos: typeof data.watched_repos === 'number' ? data.watched_repos : 0,
+      });
+    } catch (err) {
+      console.error('Error fetching stats', err);
+    }
+  };
+
+  useEffect(() => {
+    if (!user) return;
+    let interval: any | null = null;
+    if (activeTab === 'dashboard') {
+      fetchStats();
+      interval = setInterval(() => fetchStats(), 10000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
   }, [activeTab, user]);
 
   const handleAddRepo = () => {
@@ -306,16 +338,16 @@ function App() {
                   {/* KPI Cards */}
                   <div className="grid grid-cols-3 gap-4">
                       <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl">
-                          <p className="text-slate-400 text-sm mb-1">Total Plugins</p>
-                          <p className="text-3xl font-bold text-white">{plugins.length}</p>
+                        <p className="text-slate-400 text-sm mb-1">Total Plugins</p>
+                        <p className="text-3xl font-bold text-white">{stats.total_plugins}</p>
                       </div>
                       <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl">
-                          <p className="text-slate-400 text-sm mb-1">Active Repos</p>
-                          <p className="text-3xl font-bold text-indigo-400">{repos.length}</p>
+                        <p className="text-slate-400 text-sm mb-1">Installed Repos</p>
+                        <p className="text-3xl font-bold text-indigo-400">{stats.installed_repos}</p>
                       </div>
                       <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl">
-                          <p className="text-slate-400 text-sm mb-1">Pending PRs</p>
-                          <p className="text-3xl font-bold text-emerald-400">1</p>
+                        <p className="text-slate-400 text-sm mb-1">Watched Repos</p>
+                        <p className="text-3xl font-bold text-emerald-400">{stats.watched_repos}</p>
                       </div>
                   </div>
 
@@ -404,23 +436,23 @@ function App() {
                                     </td>
                                     <td className="px-6 py-4 text-right">
                                       <div className="flex items-center justify-end gap-3">
-                                          {!repo.watched ? (
+                                            {!repo.watched ? (
                                               <button
-                                                  onClick={() => { setConfirmingRepo(repo); setConfirmingWatchedValue(true); }}
-                                                  className="px-3 py-1 text-xs font-medium bg-indigo-600 hover:bg-indigo-500 text-white rounded-md transition-colors flex items-center gap-1"
+                                                onClick={() => { setConfirmingRepo(repo); setConfirmingWatchedValue(true); }}
+                                                className="px-3 py-1 text-xs font-medium bg-indigo-700 hover:bg-indigo-600 text-white rounded-md transition-colors flex items-center gap-1"
                                               >
-                                                  <Send className="w-3 h-3" />
-                                                  Apply
+                                                <Send className="w-3 h-3" />
+                                                Apply
                                               </button>
-                                          ) : (
+                                            ) : (
                                               <button
-                                                  onClick={() => { setConfirmingRepo(repo); setConfirmingWatchedValue(false); }}
-                                                  className="px-3 py-1 text-xs font-medium bg-red-600 hover:bg-red-500 text-white rounded-md transition-colors flex items-center gap-1"
+                                                onClick={() => { setConfirmingRepo(repo); setConfirmingWatchedValue(false); }}
+                                                className="px-3 py-1 text-xs font-medium bg-red-500 hover:bg-red-400 text-white rounded-md transition-colors flex items-center gap-1"
                                               >
-                                                  <EyeOff className="w-3 h-3" />
-                                                  Unwatch
+                                                <EyeOff className="w-3 h-3" />
+                                                Unwatch
                                               </button>
-                                          )}
+                                            )}
                                       </div>
                                     </td>
                                 </tr>

@@ -59,7 +59,7 @@ class RepositoryBasicModel(BaseModel):
     full_name: str
     html_url: str
     watched: bool = False
-    releases: List[str] = []
+    releases: List[ReleaseModel] = []
     author: Optional[AuthorModel] = None
     model_config = ConfigDict(from_attributes=True)
 

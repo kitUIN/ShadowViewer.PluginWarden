@@ -138,6 +138,7 @@ class Plugin(Base):
     id = Column(Integer, primary_key=True)
     plugin_id = Column(String(255), unique=True, nullable=True)
     release_id = Column(Integer, ForeignKey('releases.id'), unique=True)
+    repository_id = Column(Integer, ForeignKey('repositories.id'), nullable=True)
 
     # 常用字段
     name = Column(String(255), nullable=True)
@@ -159,6 +160,7 @@ class Plugin(Base):
 
     # 关系
     release = relationship("Release", back_populates="plugin")
+    repository = relationship("Repository")
 
     def __repr__(self):
         return f"<Plugin(plugin_id='{self.plugin_id}', name='{self.name}', version='{self.version}')>"
@@ -288,7 +290,12 @@ def process_asset(session: Session, release: Release, asset_data: dict):
                 plugin_obj = session.query(Plugin).filter_by(release_id=release.id).first()
                 if not plugin_obj:
                     plugin_obj = Plugin(release_id=release.id)
+                    # 关联到发布对应的仓库
+                    plugin_obj.repository_id = release.repository_id
                     session.add(plugin_obj)
+                else:
+                    # 确保 repository_id 与 release 的 repository 保持一致
+                    plugin_obj.repository_id = release.repository_id
 
                 plugin_obj.plugin_id = plugin_data.get('Id')
                 plugin_obj.name = plugin_data.get('Name') or plugin_data.get('name')
