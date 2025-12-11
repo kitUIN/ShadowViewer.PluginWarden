@@ -44,6 +44,8 @@ export interface PluginData {
   DllName: string;
   Dependencies: PluginDependency[];
   ReleaseAssets?: ReleaseAssets; // Added by the automation script
+  // Newer backend may expose a simple Download URL on the root object
+  Download?: string;
   LastUpdated?: string; // UI Metadata
 }
 

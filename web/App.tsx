@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { LayoutDashboard, Store, GitBranch, Settings, Plus, Activity, Github, Eye, EyeOff, Send, RefreshCw } from 'lucide-react';
-import { MOCK_PLUGINS, MOCK_REPOS, MOCK_LOGS } from './constants';
 import { PluginCard } from './components/PluginCard';
 import { LogTerminal } from './components/LogTerminal';
 import { LoginPage } from './components/LoginPage';
@@ -11,10 +10,10 @@ function App() {
   const [user, setUser] = useState<Author | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'store' | 'repos'>('store');
-  const [plugins, setPlugins] = useState<PluginData[]>(MOCK_PLUGINS);
+  const [plugins, setPlugins] = useState<Record<string, PluginData[]>>({});
   const [pluginsLoading, setPluginsLoading] = useState<boolean>(false);
   const [repos, setRepos] = useState<RepositoryBasicModel[]>([]);
-  const [stats, setStats] = useState<{ total_plugins: number; installed_repos: number; watched_repos: number }>({ total_plugins: MOCK_PLUGINS.length, installed_repos: 0, watched_repos: 0 });
+  const [stats, setStats] = useState<{ total_plugins: number; installed_repos: number; watched_repos: number }>({ total_plugins: 0, installed_repos: 0, watched_repos: 0 });
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [showInstallModal, setShowInstallModal] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
@@ -159,10 +158,11 @@ function App() {
         return;
       }
       const data = await res.json();
-      if (data && Array.isArray(data.items)) {
-        setPlugins(data.items as PluginData[]);
+      // Backend may return either a flat array of PluginData or a grouped array like { id: string, version: PluginData[] }
+      if (data && data.items) {
+        setPlugins(data.items);
       } else {
-        setPlugins([]);
+        setPlugins({});
       }
     } catch (err) {
       console.error('Error fetching store plugins', err);
@@ -555,19 +555,11 @@ function App() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                  {plugins.length === 0 && !pluginsLoading ? (
+                  {Object.keys(plugins).length === 0 && !pluginsLoading ? (
                     <div className="col-span-full text-center text-slate-500 py-12">No plugins available yet.</div>
                   ) : (
                     // Group plugins by ID and only show the latest version, but pass all versions to the card
-                    Object.values(
-                      plugins.reduce((acc, plugin) => {
-                        if (!acc[plugin.Id]) {
-                          acc[plugin.Id] = [];
-                        }
-                        acc[plugin.Id].push(plugin);
-                        return acc;
-                      }, {} as Record<string, PluginData[]>)
-                    ).map((versions: PluginData[]) => {
+                    Object.values(plugins).map((versions: PluginData[]) => {
                       // Sort versions descending (assuming semantic versioning or simple string comparison works for now)
                       // For robust semver sorting, a library like 'semver' would be better, but simple sort might suffice if format is consistent
                       versions.sort((a, b) => b.Version.localeCompare(a.Version, undefined, { numeric: true, sensitivity: 'base' }));
@@ -577,7 +569,6 @@ function App() {
                         <PluginCard 
                           key={latest.Id} 
                           plugin={latest} 
-                          allPlugins={plugins} 
                           versions={versions}
                         />
                       );

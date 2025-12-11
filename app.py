@@ -7,6 +7,8 @@ from fastapi_swagger import patch_fastapi
 from loguru import logger
 import hashlib
 import hmac
+from sqlalchemy import func, cast
+from sqlalchemy.types import String
 
 import uvicorn
 from models import get_db, Session,Repository,Author,Asset,Release,WebhookLog,Plugin, save_releases_to_db, write_webhook_log_with_db
@@ -214,10 +216,38 @@ async def get_store_plugins(page: int = Query(1, ge=1), limit: int = Query(30, g
     仅返回属于被 `watched` 的仓库且对应 Release `visible==True` 的插件。
     """
     try:
-        query = db.query(Plugin).join(Plugin.release).join(Plugin.repository).filter(Release.visible == True, Repository.watched == True)
-        total = query.count()
+        # Count distinct plugins (grouped by plugin identifier) instead of counting all versions
+        distinct_expr = func.coalesce(Plugin.plugin_id, cast(Plugin.id, String))
+        total = db.query(func.count(func.distinct(distinct_expr))).join(Plugin.release).join(Plugin.repository).filter(
+            Release.visible == True, Repository.watched == True).scalar() or 0
         pages = ceil(total / limit) if total and limit else 1
-        items = query.order_by(Plugin.created_at.desc()).offset((page - 1) * limit).limit(limit).all()
+
+        # Build a subquery that selects distinct plugin identifiers and the latest created_at per plugin
+        distinct_expr = func.coalesce(Plugin.plugin_id, cast(Plugin.id, String))
+        subq = db.query(
+            distinct_expr.label('pid'),
+            func.max(Plugin.created_at).label('last_updated')
+        ).join(Plugin.release).join(Plugin.repository).filter(
+            Release.visible == True, Repository.watched == True
+        ).group_by(distinct_expr).order_by(func.max(Plugin.created_at).desc()).offset((page - 1) * limit).limit(limit).all()
+
+        # Extract the paged plugin ids in order
+        paged_pids = [r.pid for r in subq]
+
+        # If no pids returned, return empty page
+        if not paged_pids:
+            return {
+                "total": total,
+                "page": page,
+                "limit": limit,
+                "pages": pages,
+                "items": {}
+            }
+
+        # Fetch all Plugin rows that belong to the selected plugin ids, ordered by created_at desc
+        items = db.query(Plugin).join(Plugin.release).join(Plugin.repository).filter(
+            Release.visible == True, Repository.watched == True, distinct_expr.in_(paged_pids)
+        ).order_by(Plugin.created_at.desc()).all()
 
         results = []
         for p in items:
@@ -283,7 +313,7 @@ async def get_store_plugins(page: int = Query(1, ge=1), limit: int = Query(30, g
                     "SdkVersion": _get(plugin_obj, 'SdkVersion', 'sdk_version') or p.sdk_version,
                     "DllName": _get(plugin_obj, 'DllName', default=None),
                     "Dependencies": deps,
-                    "ReleaseAssets": {"PluginJson": p.raw_json, "ZipPackage": zip_url},
+                    "Download": zip_url,
                     "LastUpdated": p.created_at.isoformat() if getattr(p, 'created_at', None) else None
                 })
             else:
@@ -320,16 +350,23 @@ async def get_store_plugins(page: int = Query(1, ge=1), limit: int = Query(30, g
                     "SdkVersion": p.sdk_version,
                     "DllName": None,
                     "Dependencies": deps,
-                    "ReleaseAssets": {"PluginJson": None, "ZipPackage": zip_url},
+                    "Download": zip_url,
                     "LastUpdated": p.created_at.isoformat() if getattr(p, 'created_at', None) else None
                 })
+
+        grouped = {}
+        for r in results:
+            pid = r.get('Id') or r.get('id') or ""
+            if pid not in grouped:
+                grouped[pid] = []
+            grouped[pid].append(r)
 
         return {
             "total": total,
             "page": page,
             "limit": limit,
             "pages": pages,
-            "items": results
+            "items": grouped
         }
     except Exception as e:
         logger.exception("Failed to fetch store plugins")

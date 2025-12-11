@@ -1,18 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { PluginData } from '../types';
 import { Download, ShieldCheck, Tag, Sparkles, Box, FileCode, Github, User, Link, ChevronDown } from 'lucide-react';
-import { generateMarketingDescription, analyzeDependencies } from '../services/geminiService';
 
 interface PluginCardProps {
   plugin: PluginData;
-  allPlugins: PluginData[];
   versions?: PluginData[];
 }
 
-export const PluginCard: React.FC<PluginCardProps> = ({ plugin, allPlugins, versions }) => {
+export const PluginCard: React.FC<PluginCardProps> = ({ plugin,  versions }) => {
   const [selectedVersion, setSelectedVersion] = useState(plugin.Version);
   const [aiDescription, setAiDescription] = useState<string | null>(null);
-  const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -20,28 +17,6 @@ export const PluginCard: React.FC<PluginCardProps> = ({ plugin, allPlugins, vers
   }, [plugin.Version]);
 
   const currentPlugin = versions?.find(v => v.Version === selectedVersion) || plugin;
-
-  const handleAiEnhance = async () => {
-    if (!process.env.API_KEY) {
-      alert("Please set API_KEY in environment variables to use AI features.");
-      return;
-    }
-    setLoading(true);
-    const desc = await generateMarketingDescription(currentPlugin);
-    setAiDescription(desc);
-    setLoading(false);
-  };
-
-  const handleDependencyCheck = async () => {
-    if (!process.env.API_KEY) {
-      alert("Please set API_KEY in environment variables.");
-      return;
-    }
-    setLoading(true);
-    const analysis = await analyzeDependencies(currentPlugin, allPlugins);
-    setAiAnalysis(analysis);
-    setLoading(false);
-  };
 
   return (
     <div style={{ width: 'calc(100% + 50px)' }} className="bg-slate-800 rounded-xl border border-slate-700 hover:border-indigo-500/50 transition-all duration-300 overflow-hidden flex flex-col">
@@ -109,13 +84,6 @@ export const PluginCard: React.FC<PluginCardProps> = ({ plugin, allPlugins, vers
           )}
         </p>
 
-        {/* Analysis Result Box */}
-        {aiAnalysis && (
-            <div className="bg-slate-900/50 p-2 rounded border border-slate-700 text-xs text-slate-400">
-                <span className="font-bold text-emerald-500">Analysis: </span>{aiAnalysis}
-            </div>
-        )}
-
         <div className="flex-1"></div>
 
         {/* Tags */}
@@ -158,7 +126,7 @@ export const PluginCard: React.FC<PluginCardProps> = ({ plugin, allPlugins, vers
               Install Plugin
             </a>
             <a 
-              href={currentPlugin.ReleaseAssets?.ZipPackage || '#'} 
+              href={currentPlugin.Download || '#'} 
               className="bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded-lg flex items-center justify-center transition-colors"
               title="Download Package"
             >
