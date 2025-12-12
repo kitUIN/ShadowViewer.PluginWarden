@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { LayoutDashboard, Store, GitBranch, Settings, Plus, Activity, Github, Eye, EyeOff, Send, RefreshCw } from 'lucide-react';
 import { PluginCard } from './components/PluginCard';
-import { LogTerminal } from './components/LogTerminal';
 import { LoginPage } from './components/LoginPage';
 import { UserMenu } from './components/UserMenu';
-import { PluginData, RepositoryConfig, LogEntry, Author, RepositoryBasicModel, PaginatedResponse, Release } from './types';
+import { PluginData, RepositoryConfig, Author, RepositoryBasicModel, PaginatedResponse, Release } from './types';
 import { ReleasesModal } from './components/ReleasesModal';
 import { InstallModal } from './components/InstallModal';
 import { ReposView } from './components/ReposView';
 import { DashboardView } from './components/DashboardView';
+import { StoreView } from './components/StoreView';
 
 function App() {
   const [user, setUser] = useState<Author | null>(null);
@@ -17,8 +17,8 @@ function App() {
   const [plugins, setPlugins] = useState<PluginData[]>([]);
   const [pluginsLoading, setPluginsLoading] = useState<boolean>(false);
   const [repos, setRepos] = useState<RepositoryBasicModel[]>([]);
-  const [stats, setStats] = useState<{ total_plugins: number; installed_repos: number; watched_repos: number }>({ total_plugins: 0, installed_repos: 0, watched_repos: 0 });
-  const [logs, setLogs] = useState<LogEntry[]>([]);
+  
+  
   const [showInstallModal, setShowInstallModal] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const [viewingReleasesRepo, setViewingReleasesRepo] = useState<RepositoryBasicModel | null>(null);
@@ -71,72 +71,7 @@ function App() {
     }
   }, [showInstallModal, user]);
 
-  // Fetch webhook logs from backend and map numeric level to UI level strings
-  const mapLevel = (levelNum: number) => {
-    switch (levelNum) {
-      case 1:
-        return 'warning' as const;
-      case 2:
-        return 'error' as const;
-      case 3:
-        return 'success' as const;
-      case 0:
-      default:
-        return 'info' as const;
-    }
-  };
-
-  const fetchWebhookLogs = async (day?: string) => {
-    try {
-      const qs = day ? `?day=${encodeURIComponent(day)}` : '';
-      const res = await fetch(`/api/webhook_logs${qs}`);
-      if (!res.ok) {
-        console.error('Failed to fetch webhook logs', await res.text());
-        return;
-      }
-      const data = await res.json();
-      // backend returns array of WebhookLogModel
-      const mapped: LogEntry[] = (data || []).map((l: any) => ({
-        id: String(l.id),
-        timestamp: l.created_at ? new Date(l.created_at).toLocaleTimeString() : new Date().toLocaleTimeString(),
-        level: mapLevel(typeof l.level === 'number' ? l.level : 0),
-        message: l.payload || `${l.event}${l.action ? `:${l.action}` : ''}${l.repository && l.repository.full_name ? ` (${l.repository.full_name})` : ''}`
-      }));
-
-      // Merge previous logs with newly fetched logs, dedupe by id (keep newest occurrence),
-      // keep order oldest->newest and limit to last 50 entries (最新在最下面)
-      setLogs(prev => {
-        const combined = [...prev, ...mapped];
-        const seen = new Set<string>();
-        const rev: LogEntry[] = [];
-        // iterate from newest to oldest so we keep the newest occurrence
-        for (let i = combined.length - 1; i >= 0; i--) {
-          const item = combined[i];
-          if (!seen.has(item.id)) {
-            seen.add(item.id);
-            rev.push(item);
-          }
-        }
-        // rev currently newest->oldest, reverse to oldest->newest and keep last 50
-        return rev.reverse().slice(-50);
-      });
-    } catch (err) {
-      console.error('Error fetching webhook logs', err);
-    }
-  };
-
-  useEffect(() => {
-    if (!user) return;
-    let interval: any | null = null;
-    // fetch immediately when dashboard opened
-    if (activeTab === 'dashboard') {
-      fetchWebhookLogs();
-      interval = setInterval(() => fetchWebhookLogs(), 5000);
-    }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [activeTab, user]);
+  
 
   useEffect(() => {
     if (activeTab === 'repos' && user) {
@@ -178,36 +113,7 @@ function App() {
     }
   }, [activeTab]);
 
-  const fetchStats = async () => {
-    if (!user) return;
-    try {
-      const res = await fetch('/api/stats');
-      if (!res.ok) {
-        console.error('Failed to fetch stats', await res.text());
-        return;
-      }
-      const data = await res.json();
-      setStats({
-        total_plugins: typeof data.total_plugins === 'number' ? data.total_plugins : 0,
-        installed_repos: typeof data.installed_repos === 'number' ? data.installed_repos : 0,
-        watched_repos: typeof data.watched_repos === 'number' ? data.watched_repos : 0,
-      });
-    } catch (err) {
-      console.error('Error fetching stats', err);
-    }
-  };
-
-  useEffect(() => {
-    if (!user) return;
-    let interval: any | null = null;
-    if (activeTab === 'dashboard') {
-      fetchStats();
-      interval = setInterval(() => fetchStats(), 10000);
-    }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [activeTab, user]);
+  
 
   const updateRepoWatched = async (repoId: number, watched: boolean) => {
     try {
@@ -383,7 +289,7 @@ function App() {
           
           {/* DASHBOARD VIEW */}
           {activeTab === 'dashboard' && (
-            <DashboardView stats={stats} logs={logs} />
+            <DashboardView />
           )} 
 
           {/* REPOS VIEW */}
@@ -395,23 +301,8 @@ function App() {
 
           {/* STORE PREVIEW VIEW */}
           {activeTab === 'store' && (
-            <div className="space-y-6">
-                <div className="flex items-center justify-between">
-                    <p className="text-slate-400">Browse available plugins in the store.</p>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                  {plugins.length === 0 && !pluginsLoading ? (
-                    <div className="col-span-full text-center text-slate-500 py-12">No plugins available yet.</div>
-                  ) : (
-                    plugins.map((plugin: PluginData) => (
-                      <PluginCard key={plugin.Id} plugin={plugin} />
-                    ))
-                    )}
-                </div>
-            </div>
-          )}
-        
+            <StoreView plugins={plugins} pluginsLoading={pluginsLoading} />
+          )} 
         </div>
       </main>
 
