@@ -138,8 +138,8 @@ class Plugin(Base):
     __tablename__ = 'plugins'
 
     id = Column(Integer, primary_key=True)
-    plugin_id = Column(String(255), unique=True, nullable=True)
-    release_id = Column(Integer, ForeignKey('releases.id'), unique=True)
+    plugin_id = Column(String(255), nullable=True)
+    release_id = Column(Integer, ForeignKey('releases.id'))
     repository_id = Column(Integer, ForeignKey('repositories.id'), nullable=True)
 
     # 常用字段
