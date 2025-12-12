@@ -34,19 +34,16 @@ export interface PluginData {
   Id: string;
   Name: string;
   Version: string;
+  Versions: string[];
   Description: string;
   Authors: string;
   WebUri: string;
   Logo: string;
-  PluginManage?: PluginManage; // Optional in list view, present in plugin.json
-  AffiliationTag: AffiliationTag;
+  Tags: string[];
   SdkVersion: string;
-  DllName: string;
   Dependencies: PluginDependency[];
-  ReleaseAssets?: ReleaseAssets; // Added by the automation script
-  // Newer backend may expose a simple Download URL on the root object
-  Download?: string;
-  LastUpdated?: string; // UI Metadata
+  DownloadUrl?: string;
+  LastUpdated?: string;
 }
 
 export interface RepositoryConfig {

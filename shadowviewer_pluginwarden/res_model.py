@@ -106,15 +106,14 @@ class PluginModel(BaseModel):
     Id: Optional[str]
     Name: Optional[str]
     Version: Optional[str]
+    Versions: List[str] = []
+    Tags: List[str] = []
     Description: Optional[str]
     Authors: Optional[str]
     WebUri: Optional[str]
     Logo: Optional[str]
-    PluginManage: Optional[Dict] = None
-    AffiliationTag: AffiliationTagModel
     SdkVersion: Optional[str]
-    DllName: Optional[str] = None
     Dependencies: List[PluginDependencyModel] = []
-    ReleaseAssets: Optional[ReleaseAssetsModel] = None
+    DownloadUrl: Optional[str] = None
     LastUpdated: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)

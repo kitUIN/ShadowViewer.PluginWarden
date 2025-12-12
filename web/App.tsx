@@ -10,7 +10,7 @@ function App() {
   const [user, setUser] = useState<Author | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'store' | 'repos'>('store');
-  const [plugins, setPlugins] = useState<Record<string, PluginData[]>>({});
+  const [plugins, setPlugins] = useState<PluginData[]>([]);
   const [pluginsLoading, setPluginsLoading] = useState<boolean>(false);
   const [repos, setRepos] = useState<RepositoryBasicModel[]>([]);
   const [stats, setStats] = useState<{ total_plugins: number; installed_repos: number; watched_repos: number }>({ total_plugins: 0, installed_repos: 0, watched_repos: 0 });
@@ -162,7 +162,7 @@ function App() {
       if (data && data.items) {
         setPlugins(data.items);
       } else {
-        setPlugins({});
+        setPlugins([]);
       }
     } catch (err) {
       console.error('Error fetching store plugins', err);
@@ -555,25 +555,13 @@ function App() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                  {Object.keys(plugins).length === 0 && !pluginsLoading ? (
+                  {plugins.length === 0 && !pluginsLoading ? (
                     <div className="col-span-full text-center text-slate-500 py-12">No plugins available yet.</div>
                   ) : (
-                    // Group plugins by ID and only show the latest version, but pass all versions to the card
-                    Object.values(plugins).map((versions: PluginData[]) => {
-                      // Sort versions descending (assuming semantic versioning or simple string comparison works for now)
-                      // For robust semver sorting, a library like 'semver' would be better, but simple sort might suffice if format is consistent
-                      versions.sort((a, b) => b.Version.localeCompare(a.Version, undefined, { numeric: true, sensitivity: 'base' }));
-                      const latest = versions[0];
-                      
-                      return (
-                        <PluginCard 
-                          key={latest.Id} 
-                          plugin={latest} 
-                          versions={versions}
-                        />
-                      );
-                    })
-                  )}
+                    plugins.map((plugin: PluginData) => (
+                      <PluginCard key={plugin.Id} plugin={plugin} />
+                    ))
+                    )}
                 </div>
             </div>
           )}

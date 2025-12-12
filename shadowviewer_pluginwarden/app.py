@@ -17,6 +17,7 @@ from res_model import *
 from auth import  router as auth_router, get_current_user
 from authors import  router  as authors_router
 from repositories import  router  as repositories_router
+from store import  router  as store_router
 
 def verify_signature(payload_body, secret_token, signature_header):
     """Verify that the payload was sent from GitHub by validating SHA256.
@@ -47,6 +48,8 @@ app.include_router(auth_router, prefix="/api")
 app.include_router(authors_router, prefix="/api")
 # include repositories routes
 app.include_router(repositories_router, prefix="/api")
+# include store routes
+app.include_router(store_router, prefix="/api")
 
 
 
@@ -208,169 +211,6 @@ async def get_stats(db: Session = Depends(get_db), current_user: Author = Depend
         logger.exception("Failed to compute stats")
         raise HTTPException(status_code=500, detail="Failed to compute stats")
 
-
-@app.get("/api/store/plugins", tags=["Store"])
-async def get_store_plugins(page: int = Query(1, ge=1), limit: int = Query(30, ge=1, le=200), db: Session = Depends(get_db)):
-    """
-    返回用于 Store Preview 的插件列表（分页）。
-    仅返回属于被 `watched` 的仓库且对应 Release `visible==True` 的插件。
-    """
-    try:
-        # Count distinct plugins (grouped by plugin identifier) instead of counting all versions
-        distinct_expr = func.coalesce(Plugin.plugin_id, cast(Plugin.id, String))
-        total = db.query(func.count(func.distinct(distinct_expr))).join(Plugin.release).join(Plugin.repository).filter(
-            Release.visible == True, Repository.watched == True).scalar() or 0
-        pages = ceil(total / limit) if total and limit else 1
-
-        # Build a subquery that selects distinct plugin identifiers and the latest created_at per plugin
-        distinct_expr = func.coalesce(Plugin.plugin_id, cast(Plugin.id, String))
-        subq = db.query(
-            distinct_expr.label('pid'),
-            func.max(Plugin.created_at).label('last_updated')
-        ).join(Plugin.release).join(Plugin.repository).filter(
-            Release.visible == True, Repository.watched == True
-        ).group_by(distinct_expr).order_by(func.max(Plugin.created_at).desc()).offset((page - 1) * limit).limit(limit).all()
-
-        # Extract the paged plugin ids in order
-        paged_pids = [r.pid for r in subq]
-
-        # If no pids returned, return empty page
-        if not paged_pids:
-            return {
-                "total": total,
-                "page": page,
-                "limit": limit,
-                "pages": pages,
-                "items": {}
-            }
-
-        # Fetch all Plugin rows that belong to the selected plugin ids, ordered by created_at desc
-        items = db.query(Plugin).join(Plugin.release).join(Plugin.repository).filter(
-            Release.visible == True, Repository.watched == True, distinct_expr.in_(paged_pids)
-        ).order_by(Plugin.created_at.desc()).all()
-
-        results = []
-        for p in items:
-            # default asset extraction
-            zip_url = None
-            try:
-                rel = p.release
-                if rel and rel.assets:
-                    for a in rel.assets:
-                        if a.name and a.name.lower().endswith('.sdow'):
-                            zip_url = a.browser_download_url
-                            break
-            except Exception:
-                zip_url = None
-
-            # Try to construct final model from raw_json if available
-            plugin_obj = None
-            if getattr(p, 'raw_json', None):
-                try:
-                    plugin_obj = json.loads(p.raw_json)
-                except Exception:
-                    plugin_obj = None
-
-            # helper to safely read nested values with common alternate keys
-            def _get(obj, *keys, default=None):
-                if not obj:
-                    return default
-                for k in keys:
-                    if k in obj:
-                        return obj.get(k)
-                return default
-
-            if plugin_obj:
-                # Build from plugin.json content, with fallbacks to DB fields
-                affiliation = _get(plugin_obj, 'AffiliationTag', None) or {
-                    "Name": (p.tags[0].tag if p.tags and len(p.tags) > 0 else "") ,
-                    "BackgroundHex": p.background_color or "#111827",
-                    "ForegroundHex": "#FFFFFF",
-                    "Icon": "",
-                    "PluginId": plugin_obj.get('Id') or p.plugin_id
-                }
-
-                deps = []
-                raw_deps = _get(plugin_obj, 'Dependencies', 'dependencies', default=[]) or []
-                for d in raw_deps:
-                    try:
-                        dep_id = d.get('Id') if isinstance(d, dict) else d
-                        need = d.get('Need') if isinstance(d, dict) else None
-                        deps.append({"Id": dep_id, "Need": need})
-                    except Exception:
-                        continue
-
-                results.append({
-                    "Id": _get(plugin_obj, 'Id', 'id') or p.plugin_id or str(p.id),
-                    "Name": _get(plugin_obj, 'Name', 'name') or p.name,
-                    "Version": _get(plugin_obj, 'Version', 'version') or p.version,
-                    "Description": _get(plugin_obj, 'Description', 'description') or p.description,
-                    "Authors": _get(plugin_obj, 'Authors', 'authors') or p.authors,
-                    "WebUri": _get(plugin_obj, 'WebUri', 'web_uri') or p.web_uri,
-                    "Logo": _get(plugin_obj, 'Logo', 'logo') or p.logo,
-                    "PluginManage": _get(plugin_obj, 'PluginManage', default=None),
-                    "AffiliationTag": affiliation,
-                    "SdkVersion": _get(plugin_obj, 'SdkVersion', 'sdk_version') or p.sdk_version,
-                    "DllName": _get(plugin_obj, 'DllName', default=None),
-                    "Dependencies": deps,
-                    "Download": zip_url,
-                    "LastUpdated": p.created_at.isoformat() if getattr(p, 'created_at', None) else None
-                })
-            else:
-                # Fallback: construct from DB fields (previous behavior)
-                tag_name = None
-                if p.tags and len(p.tags) > 0:
-                    try:
-                        tag_name = p.tags[0].tag
-                    except Exception:
-                        tag_name = None
-
-                affiliation = {
-                    "Name": tag_name or "",
-                    "BackgroundHex": p.background_color or "#111827",
-                    "ForegroundHex": "#FFFFFF",
-                    "Icon": "",
-                    "PluginId": p.plugin_id
-                }
-
-                deps = []
-                for d in (p.dependencies or []):
-                    deps.append({"Id": d.dep_id, "Need": d.need})
-
-                results.append({
-                    "Id": p.plugin_id or str(p.id),
-                    "Name": p.name,
-                    "Version": p.version,
-                    "Description": p.description,
-                    "Authors": p.authors,
-                    "WebUri": p.web_uri,
-                    "Logo": p.logo,
-                    "PluginManage": None,
-                    "AffiliationTag": affiliation,
-                    "SdkVersion": p.sdk_version,
-                    "DllName": None,
-                    "Dependencies": deps,
-                    "Download": zip_url,
-                    "LastUpdated": p.created_at.isoformat() if getattr(p, 'created_at', None) else None
-                })
-
-        grouped = {}
-        for r in results:
-            pid = r.get('Id') or r.get('id') or ""
-            if pid not in grouped:
-                grouped[pid] = []
-            grouped[pid].append(r)
-
-        return {
-            "total": total,
-            "page": page,
-            "limit": limit,
-            "pages": pages,
-            "items": grouped
-        }
-    except Exception as e:
-        logger.exception("Failed to fetch store plugins")
-        raise HTTPException(status_code=500, detail="Failed to fetch plugins for store preview")
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8100)

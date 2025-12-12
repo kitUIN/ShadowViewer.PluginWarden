@@ -1,22 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { PluginData } from '../types';
-import { Download, ShieldCheck, Tag, Sparkles, Box, FileCode, Github, User, Link, ChevronDown } from 'lucide-react';
+import { Download, Tag, Box, FileCode, Github, User, Link, ChevronDown } from 'lucide-react';
 
 interface PluginCardProps {
   plugin: PluginData;
-  versions?: PluginData[];
 }
 
-export const PluginCard: React.FC<PluginCardProps> = ({ plugin,  versions }) => {
+export const PluginCard: React.FC<PluginCardProps> = ({ plugin }) => {
   const [selectedVersion, setSelectedVersion] = useState(plugin.Version);
-  const [aiDescription, setAiDescription] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     setSelectedVersion(plugin.Version);
   }, [plugin.Version]);
 
-  const currentPlugin = versions?.find(v => v.Version === selectedVersion) || plugin;
+  const currentPlugin = plugin;
 
   return (
     <div style={{ width: 'calc(100% + 50px)' }} className="bg-slate-800 rounded-xl border border-slate-700 hover:border-indigo-500/50 transition-all duration-300 overflow-hidden flex flex-col">
@@ -45,16 +42,16 @@ export const PluginCard: React.FC<PluginCardProps> = ({ plugin,  versions }) => 
             <div className="mb-1">
                 <h3 className="font-bold text-lg text-white shadow-black drop-shadow-md">{currentPlugin.Name}</h3>
                 <div className="flex items-center gap-2">
-                  {versions && versions.length > 1 ? (
+                  {plugin.Versions && plugin.Versions.length > 1 ? (
                     <div className="relative group">
                       <select
                         value={selectedVersion}
                         onChange={(e) => setSelectedVersion(e.target.value)}
                         className="appearance-none bg-black/30 text-white/90 text-xs px-2 py-0.5 rounded backdrop-blur-sm border-none outline-none cursor-pointer pr-6 hover:bg-black/50 transition-colors"
                       >
-                        {versions.map((v) => (
-                          <option key={v.Version} value={v.Version} className="bg-slate-800 text-white">
-                            v{v.Version}
+                        {plugin.Versions.map((v) => (
+                          <option key={v} value={v} className="bg-slate-800 text-white">
+                            {v}
                           </option>
                         ))}
                       </select>
@@ -77,11 +74,7 @@ export const PluginCard: React.FC<PluginCardProps> = ({ plugin,  versions }) => 
 
         {/* Description */}
         <p className="text-sm text-slate-300 leading-relaxed min-h-[3rem]">
-          {aiDescription ? (
-            <span className="text-indigo-300 animate-pulse">{aiDescription}</span>
-          ) : (
-            currentPlugin.Description
-          )}
+          {currentPlugin.Description || 'No description provided.'}
         </p>
 
         <div className="flex-1"></div>
