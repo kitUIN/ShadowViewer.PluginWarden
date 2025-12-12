@@ -5,6 +5,10 @@ import { LogTerminal } from './components/LogTerminal';
 import { LoginPage } from './components/LoginPage';
 import { UserMenu } from './components/UserMenu';
 import { PluginData, RepositoryConfig, LogEntry, Author, RepositoryBasicModel, PaginatedResponse, Release } from './types';
+import { ReleasesModal } from './components/ReleasesModal';
+import { InstallModal } from './components/InstallModal';
+import { ReposView } from './components/ReposView';
+import { DashboardView } from './components/DashboardView';
 
 function App() {
   const [user, setUser] = useState<Author | null>(null);
@@ -208,32 +212,6 @@ function App() {
     };
   }, [activeTab, user]);
 
-  const handleAddRepo = () => {
-     const url = prompt("Enter GitHub Repository URL:");
-     if (url) {
-         // Extract name and full_name from URL for mock display
-         const parts = url.split('/').filter(Boolean);
-         const name = parts[parts.length - 1] || 'unknown';
-         const full_name = parts.slice(-2).join('/') || name;
-
-         const newRepo: RepositoryBasicModel = {
-             id: Date.now(),
-             name,
-             full_name,
-             html_url: url,
-             watched: false,
-             releases: []
-         };
-         setRepos([...repos, newRepo]);
-         setLogs(prev => [...prev, {
-             id: Date.now().toString(),
-             timestamp: new Date().toLocaleTimeString(),
-             level: 'info',
-             message: `Added new repository to monitor: ${url}`
-         }]);
-     }
-  };
-
   const updateRepoWatched = async (repoId: number, watched: boolean) => {
     try {
       setIsUpdatingWatched(true);
@@ -413,138 +391,13 @@ function App() {
           
           {/* DASHBOARD VIEW */}
           {activeTab === 'dashboard' && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-140px)]">
-               {/* Stats Column */}
-               <div className="lg:col-span-2 space-y-6">
-                  {/* KPI Cards */}
-                  <div className="grid grid-cols-3 gap-4">
-                      <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl">
-                        <p className="text-slate-400 text-sm mb-1">Total Plugins</p>
-                        <p className="text-3xl font-bold text-white">{stats.total_plugins}</p>
-                      </div>
-                      <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl">
-                        <p className="text-slate-400 text-sm mb-1">Installed Repos</p>
-                        <p className="text-3xl font-bold text-indigo-400">{stats.installed_repos}</p>
-                      </div>
-                      <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl">
-                        <p className="text-slate-400 text-sm mb-1">Watched Repos</p>
-                        <p className="text-3xl font-bold text-emerald-400">{stats.watched_repos}</p>
-                      </div>
-                  </div>
-
-                  {/* Recent Activity / "Python Logic Visualization" */}
-                  <div className="flex-1 h-[calc(100%-140px)] min-h-[400px]">
-                      <h3 className="text-sm font-semibold text-slate-400 mb-3 flex items-center gap-2">
-                        <Activity className="w-4 h-4" />
-                        Automation Logs
-                      </h3>
-                      <LogTerminal logs={logs} />
-                  </div>
-               </div>
-
-               {/* Right Column: Quick Status */}
-               <div className="space-y-6">
-                   <div className="bg-gradient-to-br from-indigo-900/50 to-slate-900 border border-indigo-500/30 p-6 rounded-xl">
-                      <h3 className="font-bold text-lg text-white mb-2">ShadowViewer PluginStore</h3>
-                      <p className="text-sm text-slate-300 mb-4">
-                        ShadowViewer 插件商店专为 ShadowViewer App 提供，所有插件必须在 ShadowViewer 内安装后才能正常运行。
-                      </p>
-                      <a href="https://github.com/kitUIN/ShadowViewer/releases/latest" target="_blank" rel="noreferrer" className="text-sm text-indigo-400 hover:text-indigo-300 font-medium">点击前往下载地址 →</a>
-                   </div>
-               </div>
-            </div>
-          )}
+            <DashboardView stats={stats} logs={logs} />
+          )} 
 
           {/* REPOS VIEW */}
           {activeTab === 'repos' && (
-            <div className="space-y-6">
-                <div className="flex justify-between items-center">
-                    <p className="text-slate-400">Manage the GitHub repositories watched by the automation bot.</p>
-                    <button onClick={handleAddRepo} className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors">
-                        <Plus className="w-4 h-4" />
-                        Add Repository
-                    </button>
-                </div>
-
-                <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-                    <table className="w-full text-left text-sm">
-                        <thead className="bg-slate-950/50 text-slate-400 font-medium border-b border-slate-800">
-                            <tr>
-                                <th className="px-6 py-4">Repository Name</th>
-                                <th className="px-6 py-4">Author</th>
-                                <th className="px-6 py-4">Releases</th>
-                                <th className="px-6 py-4">Status</th>
-                                <th className="px-6 py-4 text-right">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-800">
-                            {repos.map(repo => (
-                                <tr key={repo.id} className="hover:bg-slate-800/50 transition-colors">
-                                    <td className="px-6 py-4 flex items-center gap-2">
-                                        <Github className="w-4 h-4 text-slate-500" />
-                                        <div className="flex flex-col">
-                                            <a href={repo.html_url} target="_blank" rel="noreferrer" className="font-mono text-slate-300 hover:text-indigo-400 transition-colors">{repo.name}</a>
-                                            <span className="text-xs text-slate-500">{repo.full_name}</span>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        {repo.author ? (
-                                            <div className="flex items-center gap-2">
-                                                <img src={repo.author.avatar_url} alt={repo.author.login} className="w-6 h-6 rounded-full" />
-                                                <span className="text-slate-400">{repo.author.login}</span>
-                                            </div>
-                                        ) : (
-                                            <span className="text-slate-600">-</span>
-                                        )}
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <button 
-                                            onClick={() => setViewingReleasesRepo(repo)}
-                                            className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-500/20 transition-colors cursor-pointer"
-                                        >
-                                            {repo.releases.length} Releases
-                                        </button>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                      {repo.watched ? (
-                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                                          <Eye className="w-3 h-3" />
-                                          Watched
-                                        </span>
-                                      ) : (
-                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                                          <Send className="w-3 h-3" />
-                                          Needs Apply
-                                        </span>
-                                      )}
-                                    </td>
-                                    <td className="px-6 py-4 text-right">
-                                      <div className="flex items-center justify-end gap-3">
-                                            {!repo.watched ? (
-                                              <button
-                                                onClick={() => { setConfirmingRepo(repo); setConfirmingWatchedValue(true); }}
-                                                className="px-3 py-1 text-xs font-medium bg-indigo-700 hover:bg-indigo-600 text-white rounded-md transition-colors flex items-center gap-1"
-                                              >
-                                                <Send className="w-3 h-3" />
-                                                Apply
-                                              </button>
-                                            ) : (
-                                              <button
-                                                onClick={() => { setConfirmingRepo(repo); setConfirmingWatchedValue(false); }}
-                                                className="px-3 py-1 text-xs font-medium bg-red-500 hover:bg-red-400 text-white rounded-md transition-colors flex items-center gap-1"
-                                              >
-                                                <EyeOff className="w-3 h-3" />
-                                                Unwatch
-                                              </button>
-                                            )}
-                                      </div>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+            <ReposView repos={repos}  
+              onUpdateWatched={updateRepoWatched} />
           )}
 
           {/* STORE PREVIEW VIEW */}
@@ -570,37 +423,7 @@ function App() {
       </main>
 
       {/* Installation Modal */}
-      {showInstallModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 max-w-md w-full text-center shadow-2xl shadow-indigo-500/10 relative overflow-hidden">
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"></div>
-            
-            <div className="w-20 h-20 bg-slate-800 rounded-2xl mx-auto mb-6 flex items-center justify-center border border-slate-700 shadow-inner">
-                <img src="/icon.png" alt="App Icon" className="w-12 h-12 object-contain" />
-            </div>
-            
-            <h3 className="text-2xl font-bold text-white mb-3">Setup Required</h3>
-            
-            <p className="text-slate-400 mb-8 leading-relaxed">
-              No repositories are currently installed. This tool monitors your repositories for new releases and automatically imports them into the ShadowViewer Plugin Store.
-            </p>
-            
-            <a 
-              href="https://github.com/apps/shadowviewerpluginwarden/installations/new" 
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-3 rounded-xl font-semibold transition-all hover:scale-105 hover:shadow-lg hover:shadow-emerald-500/20 w-full"
-            >
-              <Github className="w-5 h-5" />
-              Install GitHub App
-            </a>
-            
-            <p className="mt-4 text-xs text-slate-500">
-              You'll be redirected to GitHub to select repositories.
-            </p>
-          </div>
-        </div>
-      )}
+      {showInstallModal && ( <InstallModal /> )}
 
       {/* Confirmation Modal */}
       {confirmingRepo && (
@@ -636,63 +459,7 @@ function App() {
 
       {/* Releases Modal */}
       {viewingReleasesRepo && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-2xl w-full shadow-2xl shadow-indigo-500/10 max-h-[80vh] flex flex-col">
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-xl font-bold text-white">
-                        Releases for <span className="text-indigo-400 font-mono">{viewingReleasesRepo.name}</span>
-                    </h3>
-                    <button onClick={() => setViewingReleasesRepo(null)} className="text-slate-400 hover:text-white text-xl font-bold px-2">
-                        ✕
-                    </button>
-                </div>
-                
-                <div className="overflow-y-auto flex-1 space-y-4 pr-2 custom-scrollbar">
-                    {viewingReleasesRepo.releases.length === 0 ? (
-                        <p className="text-slate-500 text-center py-8">No releases found.</p>
-                    ) : (
-                        viewingReleasesRepo.releases.map(release => (
-                            <div key={release.id} className="bg-slate-950/50 border border-slate-800 rounded-xl p-4">
-                                <div className="flex justify-between items-start mb-2">
-                                    <div>
-                                        <div className="flex items-center gap-2">
-                                            <h4 className="font-bold text-lg text-white">{release.tag_name}</h4>
-                                            {release.draft && <span className="px-2 py-0.5 rounded text-xs bg-slate-700 text-slate-300">Draft</span>}
-                                            {release.prerelease && <span className="px-2 py-0.5 rounded text-xs bg-amber-500/10 text-amber-400 border border-amber-500/20">Pre-release</span>}
-                                        </div>
-                                        <p className="text-xs text-slate-500 mt-1">
-                                            Published on {new Date(release.published_at).toLocaleDateString()} at {new Date(release.published_at).toLocaleTimeString()}
-                                        </p>
-                                    </div>
-                                    <div className="flex items-center gap-3 bg-slate-900/50 px-3 py-1.5 rounded-lg border border-slate-800">
-                                        <span className={`text-xs font-medium ${release.visible ? 'text-emerald-400' : 'text-slate-500'}`}>
-                                            {release.visible ? 'Visible' : 'Hidden'}
-                                        </span>
-                                        <button
-                                            onClick={() => toggleReleaseVisible(release.id, release.visible)}
-                                            className={`w-10 h-5 rounded-full transition-colors relative ${release.visible ? 'bg-emerald-600' : 'bg-slate-700'}`}
-                                        >
-                                            <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-transform ${release.visible ? 'left-6' : 'left-1'}`} />
-                                        </button>
-                                    </div>
-                                </div>
-                                <div className="text-sm text-slate-400 line-clamp-2 mb-2 font-mono bg-slate-900 p-2 rounded border border-slate-800/50">
-                                    {release.body || "No description provided."}
-                                </div>
-                                <a 
-                                    href={release.html_url} 
-                                    target="_blank" 
-                                    rel="noreferrer" 
-                                    className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 w-fit"
-                                >
-                                    View on GitHub <Github className="w-3 h-3" />
-                                </a>
-                            </div>
-                        ))
-                    )}
-                </div>
-            </div>
-        </div>
+        <ReleasesModal repo={viewingReleasesRepo} onClose={() => setViewingReleasesRepo(null)} onToggleVisible={toggleReleaseVisible} />
       )}
     </div>
   );
