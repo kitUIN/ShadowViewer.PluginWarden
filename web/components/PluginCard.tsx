@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { PluginData } from '../types';
-import { Download, Tag, Box, FileCode, Github, User, Link, ChevronDown } from 'lucide-react';
+import { Download, Tag, Box, FileCode, Github, User, Link, ChevronDown, Calendar, Check } from 'lucide-react';
 
 interface PluginCardProps {
   plugin: PluginData;
@@ -8,17 +8,41 @@ interface PluginCardProps {
 
 export const PluginCard: React.FC<PluginCardProps> = ({ plugin }) => {
   const [selectedVersion, setSelectedVersion] = useState(plugin.Version);
+  const [currentPlugin, setCurrentPlugin] = useState<PluginData>(plugin);
+  const [isVersionOpen, setIsVersionOpen] = useState(false);
 
   useEffect(() => {
     setSelectedVersion(plugin.Version);
-  }, [plugin.Version]);
+    setCurrentPlugin(plugin);
+    setIsVersionOpen(false);
+  }, [plugin]);
 
-  const currentPlugin = plugin;
+  const handleVersionChange = async (newVersion: string) => {
+    setSelectedVersion(newVersion);
+    if (newVersion === plugin.Version) {
+      setCurrentPlugin(plugin);
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/store/plugins/version', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plugin_id: plugin.Id, version: newVersion }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setCurrentPlugin(data);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   return (
-    <div style={{ width: 'calc(100% + 50px)' }} className="bg-slate-800 rounded-xl border border-slate-700 hover:border-indigo-500/50 transition-all duration-300 overflow-hidden flex flex-col">
+    <div style={{ width: 'calc(100% + 50px)' }} className="bg-slate-800 rounded-xl border border-slate-700 hover:border-indigo-500/50 transition-all duration-300 overflow-visible flex flex-col relative">
       {/* Header / Banner */}
-      <div className="h-24 w-full relative overflow-hidden" style={{ backgroundColor: currentPlugin.BackgroundColor || undefined }}>
+      <div className="h-24 w-full relative rounded-t-xl" style={{ backgroundColor: currentPlugin.BackgroundColor || undefined }}>
         <div className="absolute inset-0 bg-black/10"></div>
 
         {/* GitHub Link */}
@@ -42,34 +66,61 @@ export const PluginCard: React.FC<PluginCardProps> = ({ plugin }) => {
           <div className="mb-1">
             <h3 className="font-bold text-lg text-white shadow-black drop-shadow-md">{currentPlugin.Name}</h3>
             <div className="flex items-center gap-2">
-              {plugin.Versions && plugin.Versions.length > 1 ? (
-                <div className="relative group">
-                  <select
-                    value={selectedVersion}
-                    onChange={(e) => setSelectedVersion(e.target.value)}
-                    className="appearance-none bg-black/30 text-white/90 text-xs px-2 py-0.5 rounded backdrop-blur-sm border-none outline-none cursor-pointer pr-6 hover:bg-black/50 transition-colors"
+              {plugin.Versions ? (
+                <div className="relative">
+                  <button
+                    onClick={() => setIsVersionOpen(!isVersionOpen)}
+                    className="flex items-center gap-1 bg-black/30 hover:bg-black/50 text-white/90 text-xs px-2 py-0.5 rounded backdrop-blur-sm transition-all border border-transparent hover:border-white/10 outline-none"
                   >
-                    {plugin.Versions.map((v) => (
-                      <option key={v} value={v} className="bg-slate-800 text-white">
-                        {v}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="w-3 h-3 text-white/90 absolute right-1 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <span>{selectedVersion}</span>
+                    <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${isVersionOpen ? 'rotate-180' : ''}`} />
+                  </button>
+                  
+                  {isVersionOpen && (
+                    <>
+                      <div 
+                        className="fixed inset-0 z-40" 
+                        onClick={() => setIsVersionOpen(false)} 
+                      />
+                      <div className="absolute top-full left-0 mt-1 w-32 max-h-48 overflow-y-auto bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-50 py-1 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-transparent">
+                        {plugin.Versions.map((v) => (
+                          <button
+                            key={v}
+                            onClick={() => {
+                              handleVersionChange(v);
+                              setIsVersionOpen(false);
+                            }}
+                            className={`w-full text-left px-3 py-1.5 text-xs hover:bg-slate-700 transition-colors flex items-center justify-between ${
+                              v === selectedVersion ? 'text-indigo-400 font-medium bg-slate-700/30' : 'text-slate-300'
+                            }`}
+                          >
+                            <span>{v}</span>
+                            {v === selectedVersion && <Check className="w-3 h-3" />}
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
                 </div>
-              ) : (
-                <span className="text-xs text-white/90 bg-black/30 px-2 py-0.5 rounded backdrop-blur-sm">v{currentPlugin.Version}</span>
-              )}
+              ) : null}
             </div>
           </div>
         </div>
       </div>
 
       <div className="p-4 flex-1 flex flex-col gap-3">
-        {/* Author Info */}
-        <div className="flex items-center gap-2 text-xs text-slate-400 -mt-1">
-          <User className="w-3 h-3" />
-          <span className="truncate">{currentPlugin.Authors}</span>
+        {/* Author Info & Last Updated */}
+        <div className="flex items-center justify-between text-xs text-slate-400 -mt-1">
+          <div className="flex items-center gap-2">
+            <User className="w-3 h-3" />
+            <span className="truncate max-w-[120px]">{currentPlugin.Authors}</span>
+          </div>
+          {currentPlugin.LastUpdated && (
+            <div className="flex items-center gap-1" title={`Last updated: ${new Date(currentPlugin.LastUpdated).toLocaleDateString()}`}>
+              <Calendar className="w-3 h-3" />
+              <span>{new Date(currentPlugin.LastUpdated).toLocaleDateString()}</span>
+            </div>
+          )}
         </div>
 
         {/* Description */}
@@ -121,7 +172,7 @@ export const PluginCard: React.FC<PluginCardProps> = ({ plugin }) => {
             Install Plugin
           </a>
           <a
-            href={currentPlugin.Download || '#'}
+            href={currentPlugin.DownloadUrl || '#'}
             className="bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded-lg flex items-center justify-center transition-colors"
             title="Download Package"
           >

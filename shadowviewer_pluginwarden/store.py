@@ -19,6 +19,10 @@ async def get_store_plugins(page: int = Query(1, ge=1), limit: int = Query(30, g
         db.query(
             Plugin.plugin_id.label("plugin_id"),
             func.group_concat(Plugin.version).label("versions")
+        ).join(
+            Plugin.release
+        ).filter(
+            Plugin.release.has(visible=True)
         ).group_by(Plugin.plugin_id)
         .subquery()
     )
@@ -28,6 +32,10 @@ async def get_store_plugins(page: int = Query(1, ge=1), limit: int = Query(30, g
         db.query(
             Plugin.plugin_id.label("plugin_id"),
             func.max(Plugin.version).label("latest_version")
+        ).join(
+            Plugin.release
+        ).filter(
+            Plugin.release.has(visible=True)
         ).group_by(Plugin.plugin_id)
         .subquery()
     )
@@ -113,7 +121,33 @@ class PluginVersionReqModel(BaseModel):
 
 @router.post("/plugins/version",response_model=PluginModel, tags=["Store"])
 async def get_plugin_version( req: PluginVersionReqModel, db: Session = Depends(get_db)):
-    plugin = db.query(Plugin).filter_by(plugin_id=req.plugin_id, version=req.version).first()
+    # 子查询：每个 plugin_id 的所有版本
+    all_versions_subq = (
+        db.query(
+            Plugin.plugin_id.label("plugin_id"),
+            func.group_concat(Plugin.version).label("versions")
+        ).join(
+            Plugin.release
+        ).filter(
+            Plugin.release.has(visible=True)
+        ).group_by(Plugin.plugin_id)
+        .subquery()
+    )
+    row = (
+        db.query(
+            Plugin,
+            all_versions_subq.c.versions
+        ).join(
+            all_versions_subq,
+            Plugin.plugin_id == all_versions_subq.c.plugin_id
+        ).filter(
+            Plugin.plugin_id == req.plugin_id,
+            Plugin.version == req.version
+        ).first()
+    )
+    plugin: Plugin = row[0]
+    versions_concat = row[1]
+    versions_list = versions_concat.split(',') if versions_concat else []
     if not plugin:
         return {"error": "Plugin not found"}
 
@@ -137,6 +171,7 @@ async def get_plugin_version( req: PluginVersionReqModel, db: Session = Depends(
         Id=plugin.plugin_id,
         Name=plugin.name,
         Version=plugin.version,
+        Versions=versions_list,
         Tags=tags,
         BackgroundColor=plugin.background_color,
         Description=plugin.description,
