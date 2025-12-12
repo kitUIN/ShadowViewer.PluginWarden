@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "shadowviewer.pluginwarden"
+name = "shadowviewer_pluginwarden"
 version = "0.1.0"
 description = ""
 authors = ["kitUIN <kulujun@gmail.com>"]
