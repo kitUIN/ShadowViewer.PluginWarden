@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { LayoutDashboard, Store, GitBranch, Settings, Plus, Activity, Github, Eye, EyeOff, Send, RefreshCw } from 'lucide-react';
-import { PluginCard } from './components/PluginCard';
+import { LayoutDashboard, Store, GitBranch, Settings, Plus, Activity, Github, Eye, EyeOff, Send } from 'lucide-react';
 import { LoginPage } from './components/LoginPage';
 import { UserMenu } from './components/UserMenu';
-import { PluginData, RepositoryConfig, Author, RepositoryBasicModel, PaginatedResponse, Release } from './types';
+import { RepositoryConfig, Author, RepositoryBasicModel, PaginatedResponse, Release } from './types';
 import { ReleasesModal } from './components/ReleasesModal';
 import { InstallModal } from './components/InstallModal';
 import { ReposView } from './components/ReposView';
@@ -14,8 +13,6 @@ function App() {
   const [user, setUser] = useState<Author | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'store' | 'repos'>('store');
-  const [plugins, setPlugins] = useState<PluginData[]>([]);
-  const [pluginsLoading, setPluginsLoading] = useState<boolean>(false);
   const [repos, setRepos] = useState<RepositoryBasicModel[]>([]);
   
   
@@ -83,35 +80,6 @@ function App() {
         .catch(err => console.error("Failed to fetch repositories", err));
     }
   }, [activeTab, user]);
-
-  const fetchStorePlugins = async (page = 1, limit = 40) => {
-    try {
-      setPluginsLoading(true);
-      const res = await fetch(`/api/store/plugins?page=${page}&limit=${limit}`);
-      if (!res.ok) {
-        console.error('Failed to fetch store plugins', await res.text());
-        setPluginsLoading(false);
-        return;
-      }
-      const data = await res.json();
-      // Backend may return either a flat array of PluginData or a grouped array like { id: string, version: PluginData[] }
-      if (data && data.items) {
-        setPlugins(data.items);
-      } else {
-        setPlugins([]);
-      }
-    } catch (err) {
-      console.error('Error fetching store plugins', err);
-    } finally {
-      setPluginsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (activeTab === 'store') {
-      fetchStorePlugins();
-    }
-  }, [activeTab]);
 
   
 
@@ -250,16 +218,7 @@ function App() {
             {user ? (
               <div className="flex items-center gap-3">
                 <h2 className="text-xl font-semibold text-white capitalize">{activeTab.replace('-', ' ')}</h2>
-                {activeTab === 'store' && (
-                  <button
-                    onClick={() => fetchStorePlugins()}
-                    disabled={pluginsLoading}
-                    title="刷新插件列表"
-                    className="ml-2 flex items-center justify-center w-8 h-8 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-60 transition-colors"
-                  >
-                    <RefreshCw className="w-4 h-4" />
-                  </button>
-                )}
+                {/* Store refresh handled inside StoreView */}
               </div>
             ) : (
               <div className="flex items-center gap-3">
@@ -301,7 +260,7 @@ function App() {
 
           {/* STORE PREVIEW VIEW */}
           {activeTab === 'store' && (
-            <StoreView plugins={plugins} pluginsLoading={pluginsLoading} />
+            <StoreView />
           )} 
         </div>
       </main>
