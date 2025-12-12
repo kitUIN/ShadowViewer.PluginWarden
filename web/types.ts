@@ -39,6 +39,7 @@ export interface PluginData {
   Authors: string;
   WebUri: string;
   Logo: string;
+  BackgroundColor?: string;
   Tags: string[];
   SdkVersion: string;
   Dependencies: PluginDependency[];

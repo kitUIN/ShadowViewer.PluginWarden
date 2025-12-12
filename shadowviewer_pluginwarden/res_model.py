@@ -107,6 +107,7 @@ class PluginModel(BaseModel):
     Name: Optional[str]
     Version: Optional[str]
     Versions: List[str] = []
+    BackgroundColor: Optional[str] = None
     Tags: List[str] = []
     Description: Optional[str]
     Authors: Optional[str]

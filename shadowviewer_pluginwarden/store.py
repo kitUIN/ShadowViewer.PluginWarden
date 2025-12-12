@@ -32,6 +32,12 @@ async def get_store_plugins(page: int = Query(1, ge=1), limit: int = Query(30, g
             latest_version_subq,
             (Plugin.plugin_id == latest_version_subq.c.plugin_id)
             & (Plugin.version == latest_version_subq.c.latest_version)
+        ).join(
+            Plugin.release
+        ).filter(
+            Plugin.release.has(visible=True)
+        ).group_by(
+            Plugin.id
         ).order_by(desc(Plugin.id))
     )
 
@@ -76,6 +82,7 @@ async def get_store_plugins(page: int = Query(1, ge=1), limit: int = Query(30, g
             Version=plugin_obj.version,
             Versions=versions_list,
             Tags=tags,
+            BackgroundColor=plugin_obj.background_color,
             Description=plugin_obj.description,
             Authors=plugin_obj.authors,
             WebUri=plugin_obj.web_uri,
