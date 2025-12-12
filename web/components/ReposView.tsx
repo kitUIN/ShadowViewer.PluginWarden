@@ -1,11 +1,11 @@
 import React from 'react';
-import { Plus, Github, Eye, Send, EyeOff } from 'lucide-react';
+import { Github } from 'lucide-react';
 import { RepositoryBasicModel } from '../types';
 
 interface ReposViewProps {
   repos: RepositoryBasicModel[];
   onViewReleases: (repo: RepositoryBasicModel) => void;
-  onConfirmAction: (repo: RepositoryBasicModel, watched: boolean) => void;
+  onConfirmAction: (repoId: number, watched: boolean) => void;
 }
 
 export const ReposView: React.FC<ReposViewProps> = ({ repos, onViewReleases, onConfirmAction }) => {
@@ -20,7 +20,6 @@ export const ReposView: React.FC<ReposViewProps> = ({ repos, onViewReleases, onC
               <th className="px-6 py-4">Author</th>
               <th className="px-6 py-4">Releases</th>
               <th className="px-6 py-4">Status</th>
-              <th className="px-6 py-4 text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800">
@@ -48,41 +47,26 @@ export const ReposView: React.FC<ReposViewProps> = ({ repos, onViewReleases, onC
                     onClick={() => onViewReleases(repo)}
                     className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-500/20 transition-colors cursor-pointer"
                   >
-                    {repo.releases.length} Releases
+                    {repo.releases.length} total · {repo.releases.filter(r => r.visible).length} open
                   </button>
                 </td>
                 <td className="px-6 py-4">
-                  {repo.watched ? (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                      <Eye className="w-3 h-3" />
-                      Watched
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => onConfirmAction(repo.id, !repo.watched)}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-slate-900 ${
+                        repo.watched ? 'bg-emerald-500' : 'bg-slate-700'
+                      }`}
+                    >
+                      <span
+                        className={`${
+                          repo.watched ? 'translate-x-6' : 'translate-x-1'
+                        } inline-block h-4 w-4 transform rounded-full bg-white transition-transform`}
+                      />
+                    </button>
+                    <span className={`text-xs font-medium ${repo.watched ? 'text-emerald-400' : 'text-slate-500'}`}>
+                      {repo.watched ? 'Watched' : 'Unwatched'}
                     </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                      <Send className="w-3 h-3" />
-                      Needs Apply
-                    </span>
-                  )}
-                </td>
-                <td className="px-6 py-4 text-right">
-                  <div className="flex items-center justify-end gap-3">
-                    {!repo.watched ? (
-                      <button
-                        onClick={() => onConfirmAction(repo, true)}
-                        className="px-3 py-1 text-xs font-medium bg-indigo-700 hover:bg-indigo-600 text-white rounded-md transition-colors flex items-center gap-1"
-                      >
-                        <Send className="w-3 h-3" />
-                        Apply
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => onConfirmAction(repo, false)}
-                        className="px-3 py-1 text-xs font-medium bg-red-500 hover:bg-red-400 text-white rounded-md transition-colors flex items-center gap-1"
-                      >
-                        <EyeOff className="w-3 h-3" />
-                        Unwatch
-                      </button>
-                    )}
                   </div>
                 </td>
               </tr>

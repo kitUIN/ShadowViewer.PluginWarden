@@ -21,9 +21,6 @@ function App() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [showInstallModal, setShowInstallModal] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
-  const [confirmingRepo, setConfirmingRepo] = useState<RepositoryBasicModel | null>(null);
-  const [confirmingWatchedValue, setConfirmingWatchedValue] = useState<boolean>(true);
-  const [isUpdatingWatched, setIsUpdatingWatched] = useState<boolean>(false);
   const [viewingReleasesRepo, setViewingReleasesRepo] = useState<RepositoryBasicModel | null>(null);
 
   useEffect(() => {
@@ -214,7 +211,6 @@ function App() {
 
   const updateRepoWatched = async (repoId: number, watched: boolean) => {
     try {
-      setIsUpdatingWatched(true);
       const res = await fetch(`/api/repositories/${repoId}/watched`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -228,13 +224,9 @@ function App() {
 
       // Refresh repository list from server to ensure latest data
       await fetchRepos();
-
-      setConfirmingRepo(null);
     } catch (err) {
       console.error(err);
       alert('Failed to update watch state. See console for details.');
-    } finally {
-      setIsUpdatingWatched(false);
     }
   };
 
@@ -396,8 +388,9 @@ function App() {
 
           {/* REPOS VIEW */}
           {activeTab === 'repos' && (
-            <ReposView repos={repos}  
-              onUpdateWatched={updateRepoWatched} />
+            <ReposView repos={repos} 
+              onViewReleases={(repo) => setViewingReleasesRepo(repo)}
+              onConfirmAction={updateRepoWatched} />
           )}
 
           {/* STORE PREVIEW VIEW */}
@@ -424,38 +417,6 @@ function App() {
 
       {/* Installation Modal */}
       {showInstallModal && ( <InstallModal /> )}
-
-      {/* Confirmation Modal */}
-      {confirmingRepo && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-md w-full shadow-2xl shadow-indigo-500/10">
-                <h3 className="text-xl font-bold text-white mb-4">{confirmingWatchedValue ? 'Confirm Application' : 'Confirm Unwatch'}</h3>
-                <p className="text-slate-400 mb-6 leading-relaxed">
-                  {confirmingWatchedValue ? (
-                    <>Please confirm to apply the current repository <span className="text-indigo-400 font-mono">{confirmingRepo.name}</span> as a plugin. If successful, releases published by this repository will be automatically merged into the Plugin Store as new versions.</>
-                  ) : (
-                    <>Please confirm to stop watching the repository <span className="text-indigo-400 font-mono">{confirmingRepo.name}</span>. If successful, releases from this repository will no longer be automatically merged into the Plugin Store.</>
-                  )}
-                </p>
-                <div className="flex gap-3 justify-end">
-                  <button 
-                    onClick={() => setConfirmingRepo(null)}
-                    disabled={isUpdatingWatched}
-                    className="px-4 py-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors disabled:opacity-50"
-                  >
-                    Cancel
-                  </button>
-                  <button 
-                    onClick={() => confirmingRepo && updateRepoWatched(confirmingRepo.id, confirmingWatchedValue)}
-                    disabled={isUpdatingWatched}
-                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium transition-colors shadow-lg shadow-indigo-500/20 disabled:opacity-50"
-                  >
-                    {confirmingWatchedValue ? 'Confirm Apply' : 'Confirm Unwatch'}
-                  </button>
-                </div>
-            </div>
-        </div>
-      )}
 
       {/* Releases Modal */}
       {viewingReleasesRepo && (
