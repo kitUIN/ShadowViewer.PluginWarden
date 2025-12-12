@@ -1,8 +1,9 @@
 import json
+from typing import List
 from loguru import logger
 import requests
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, ForeignKey, Text, BigInteger, text
-from sqlalchemy.orm import relationship, sessionmaker,declarative_base,Session
+from sqlalchemy.orm import relationship,Mapped, sessionmaker,declarative_base,Session
 import os
 from datetime import datetime, timezone, timedelta
 
@@ -75,13 +76,13 @@ class Release(Base):
     visible = Column(Boolean, default=True, nullable=False)
     
     # 与Repository的关系
-    repository = relationship("Repository", back_populates="releases")
+    repository: Mapped["Repository"] = relationship("Repository", back_populates="releases")
     # 与Asset的关系
-    assets = relationship("Asset", back_populates="release", cascade="all, delete-orphan")
+    assets: Mapped[List["Asset"]] = relationship("Asset", back_populates="release", cascade="all, delete-orphan")
     # 与Author的关系
-    author = relationship("Author")
+    author: Mapped["Author"] = relationship("Author")
     # 与Plugin的一对一关系（每个 Release 对应一个 plugin.json）
-    plugin = relationship("Plugin", back_populates="release", uselist=False, cascade="all, delete-orphan")
+    plugin: Mapped["Plugin"] = relationship("Plugin", back_populates="release", uselist=False, cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<Release(tag_name='{self.tag_name}', name='{self.name}')>"
@@ -104,9 +105,9 @@ class Asset(Base):
     browser_download_url = Column(String(255))
     
     # 与Release的关系
-    release = relationship("Release", back_populates="assets")
+    release: Mapped["Release"] = relationship("Release", back_populates="assets")
     # 与Uploader(Author)的关系
-    uploader = relationship("Author")
+    uploader: Mapped["Author"] = relationship("Author")
     
     def __repr__(self):
         return f"<Asset(name='{self.name}', download_count={self.download_count})>"
@@ -126,9 +127,9 @@ class Author(Base):
     # Use Author to manage permissions
     is_admin = Column(Boolean, default=False, nullable=False)
     # 反向关系：一个Author可以有多个Repository
-    repositories = relationship("Repository", back_populates="author", cascade="all, delete-orphan")
+    repositories: Mapped[List["Repository"]] = relationship("Repository", back_populates="author", cascade="all, delete-orphan")
     # 反向关系：Author 可以有多个 webhook 日志
-    webhook_logs = relationship("WebhookLog", back_populates="author", cascade="all, delete-orphan")
+    webhook_logs: Mapped[List["WebhookLog"]] = relationship("WebhookLog", back_populates="author", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<Author(login='{self.login}', id={self.id})>"
@@ -154,15 +155,15 @@ class Plugin(Base):
     # 复杂字段以 JSON 文本存储
     # 关系字段：依赖和标签（一对多）
     background_color = Column(String(50), nullable=True)
-    dependencies = relationship("Dependency", back_populates="plugin", cascade="all, delete-orphan")
-    tags = relationship("PluginTag", back_populates="plugin", cascade="all, delete-orphan")
+    dependencies: Mapped[List["Dependency"]] = relationship("Dependency", back_populates="plugin", cascade="all, delete-orphan")
+    tags: Mapped[List["PluginTag"]] = relationship("PluginTag", back_populates="plugin", cascade="all, delete-orphan")
 
     raw_json = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.now)
-
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
     # 关系
-    release = relationship("Release", back_populates="plugin")
-    repository = relationship("Repository")
+    release: Mapped["Release"] = relationship("Release", back_populates="plugin")
+    repository: Mapped["Repository"] = relationship("Repository")
 
     def __repr__(self):
         return f"<Plugin(plugin_id='{self.plugin_id}', name='{self.name}', version='{self.version}')>"
@@ -176,7 +177,7 @@ class Dependency(Base):
     dep_id = Column(String(255), nullable=False)
     need = Column(String(100), nullable=True)
 
-    plugin = relationship("Plugin", back_populates="dependencies")
+    plugin: Mapped["Plugin"] = relationship("Plugin", back_populates="dependencies")
 
     def __repr__(self):
         return f"<Dependency(dep_id='{self.dep_id}', need='{self.need}')>"
@@ -189,7 +190,7 @@ class PluginTag(Base):
     plugin_id = Column(Integer, ForeignKey('plugins.id'))
     tag = Column(String(100), nullable=False)
 
-    plugin = relationship("Plugin", back_populates="tags")
+    plugin: Mapped["Plugin"] = relationship("Plugin", back_populates="tags")
 
     def __repr__(self):
         return f"<PluginTag(tag='{self.tag}')>"
@@ -207,8 +208,8 @@ class WebhookLog(Base):
     created_at = Column(DateTime, default=datetime.now)
     level = Column(Integer, default=0)
     # 关系
-    author = relationship("Author", back_populates="webhook_logs")
-    repository = relationship("Repository")
+    author: Mapped["Author"] = relationship("Author", back_populates="webhook_logs")
+    repository: Mapped["Repository"] = relationship("Repository")
 
     def __repr__(self):
         return f"<WebhookLog(event='{self.event}', action='{self.action}', author_id={self.author_id})>"
@@ -318,11 +319,11 @@ def process_asset(session: Session, release: Release, asset_data: dict):
                         plugin_obj.dependencies.append(Dependency(dep_id=dep_id, need=need))
 
                 ps = plugin_data.get('PluginStore') or {}
-                tags = ps.get('Tag', []) or []
+                tags = ps.get('Tags', []) or []
                 plugin_obj.tags = []
                 for t in tags:
-                    plugin_obj.tags.append(PluginTag(tag=t))
-
+                    plugin_obj.tags.append(PluginTag(tag=t, plugin_id=plugin_obj.id))
+                
                 plugin_obj.background_color = ps.get('BackgroundColor')
                 plugin_obj.raw_json = plugin_text
 

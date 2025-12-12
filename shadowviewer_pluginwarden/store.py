@@ -1,7 +1,8 @@
 from math import ceil
 from typing import List
 from fastapi import APIRouter, Query, Depends
-from models import Plugin, get_db
+from pydantic import BaseModel, ConfigDict
+from models import Plugin, Release, get_db
 
 from sqlalchemy import func, desc
 from sqlalchemy.orm import Session
@@ -13,33 +14,43 @@ router = APIRouter(prefix="/store", tags=["Store"])
 
 @router.get("/plugins", response_model=PaginatedResponse[PluginModel], tags=["Store"])
 async def get_store_plugins(page: int = Query(1, ge=1), limit: int = Query(30, ge=1, le=200), db: Session = Depends(get_db)):
+    # 子查询：每个 plugin_id 的所有版本
+    all_versions_subq = (
+        db.query(
+            Plugin.plugin_id.label("plugin_id"),
+            func.group_concat(Plugin.version).label("versions")
+        ).group_by(Plugin.plugin_id)
+        .subquery()
+    )
+
     # 子查询：每个 plugin_id 的最新版本
     latest_version_subq = (
         db.query(
             Plugin.plugin_id.label("plugin_id"),
             func.max(Plugin.version).label("latest_version")
-        ).group_by(
-            Plugin.plugin_id
-        ).subquery()
+        ).group_by(Plugin.plugin_id)
+        .subquery()
     )
 
-    # 主查询：只取最新版本的 Plugin
+    # 主查询：取最新版本，同时 join 所有版本
     query = (
         db.query(
             Plugin,
-            func.group_concat(Plugin.version).label("versions")
+            all_versions_subq.c.versions
         ).join(
             latest_version_subq,
             (Plugin.plugin_id == latest_version_subq.c.plugin_id)
             & (Plugin.version == latest_version_subq.c.latest_version)
         ).join(
+            all_versions_subq,
+            Plugin.plugin_id == all_versions_subq.c.plugin_id
+        ).join(
             Plugin.release
         ).filter(
             Plugin.release.has(visible=True)
-        ).group_by(
-            Plugin.id
         ).order_by(desc(Plugin.id))
     )
+
 
     total = query.count()
     skip = (page - 1) * limit
@@ -59,12 +70,6 @@ async def get_store_plugins(page: int = Query(1, ge=1), limit: int = Query(30, g
         for d in (plugin_obj.dependencies or []):
             dependencies.append({"Id": d.dep_id, "Need": d.need})
 
-        last_updated = None
-        try:
-            if plugin_obj.created_at:
-                last_updated = plugin_obj.created_at.isoformat()
-        except Exception:
-            last_updated = None
         zip_url = None
         try:
             rel = plugin_obj.release
@@ -90,7 +95,7 @@ async def get_store_plugins(page: int = Query(1, ge=1), limit: int = Query(30, g
             SdkVersion=plugin_obj.sdk_version,
             Dependencies=dependencies,
             DownloadUrl=zip_url,
-            LastUpdated=last_updated,
+            LastUpdated=plugin_obj.updated_at.isoformat() if plugin_obj.updated_at else None,
         )
         results.append(pm)
 
@@ -101,4 +106,46 @@ async def get_store_plugins(page: int = Query(1, ge=1), limit: int = Query(30, g
         limit=limit,
         items=results
     )
+class PluginVersionReqModel(BaseModel):
+    plugin_id: str
+    version: str
+    model_config = ConfigDict(from_attributes=True)
 
+@router.post("/plugins/version",response_model=PluginModel, tags=["Store"])
+async def get_plugin_version( req: PluginVersionReqModel, db: Session = Depends(get_db)):
+    plugin = db.query(Plugin).filter_by(plugin_id=req.plugin_id, version=req.version).first()
+    if not plugin:
+        return {"error": "Plugin not found"}
+
+    # 依赖
+    dependencies = []
+    for d in (plugin.dependencies or []):
+        dependencies.append({"Id": d.dep_id, "Need": d.need})
+
+    zip_url = None
+    try:
+        rel = plugin.release
+        if rel and rel.assets:
+            for a in rel.assets:
+                if a.name and a.name.lower().endswith('.sdow'):
+                    zip_url = a.browser_download_url
+                    break
+    except Exception:
+        zip_url = None
+    tags = [i.tag for i in plugin.tags] if plugin.tags else []
+    pm = PluginModel(
+        Id=plugin.plugin_id,
+        Name=plugin.name,
+        Version=plugin.version,
+        Tags=tags,
+        BackgroundColor=plugin.background_color,
+        Description=plugin.description,
+        Authors=plugin.authors,
+        WebUri=plugin.web_uri,
+        Logo=plugin.logo,
+        SdkVersion=plugin.sdk_version,
+        Dependencies=dependencies,
+        DownloadUrl=zip_url,
+        LastUpdated=plugin.updated_at.isoformat() if plugin.updated_at else None,
+    )
+    return pm
