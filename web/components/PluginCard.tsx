@@ -165,7 +165,7 @@ export const PluginCard: React.FC<PluginCardProps> = ({ plugin }) => {
         {/* Action Buttons */}
         <div className="mt-2 flex gap-2">
           <a
-            href={`shadow://plugin-manager/install/${currentPlugin.Id}/${currentPlugin.Version}`}
+            href={`shadow://pluginmanager/store/install/${currentPlugin.Id}/${currentPlugin.Version}`}
             className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white py-2 rounded-lg flex items-center justify-center gap-2 text-sm font-medium transition-all shadow-sm hover:shadow-indigo-500/20"
           >
             <Link className="w-4 h-4" />
