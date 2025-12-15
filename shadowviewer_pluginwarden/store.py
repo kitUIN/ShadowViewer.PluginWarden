@@ -52,10 +52,8 @@ async def get_store_plugins(page: int = Query(1, ge=1), limit: int = Query(30, g
         ).join(
             all_versions_subq,
             Plugin.plugin_id == all_versions_subq.c.plugin_id
-        ).join(
-            Plugin.release
-        ).filter(
-            Plugin.release.has(visible=True)
+        ).join(Plugin.release).join(Plugin.repository).filter(
+            Plugin.release.has(visible=True) & Plugin.repository.has(watched=True)
         ).order_by(desc(Plugin.id))
     )
 
